@@ -1,0 +1,25 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MLAPI.ServerList.Server", "MLAPI.ServerList.Server\MLAPI.ServerList.Server.csproj", "{A9B57DAF-7FBF-46CF-9BD9-36E925B6EFAA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MLAPI.ServerList.Client", "MLAPI.ServerList.Client\MLAPI.ServerList.Client.csproj", "{49D8D72C-8E8C-43A7-A366-E1831EE24625}"
+EndProject
+Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "MLAPI.ServerList.Shared", "MLAPI.ServerList.Shared\MLAPI.ServerList.Shared.shproj", "{E4A4F493-8E04-4CBD-B35A-EA6BA2770045}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A9B57DAF-7FBF-46CF-9BD9-36E925B6EFAA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A9B57DAF-7FBF-46CF-9BD9-36E925B6EFAA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A9B57DAF-7FBF-46CF-9BD9-36E925B6EFAA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A9B57DAF-7FBF-46CF-9BD9-36E925B6EFAA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{49D8D72C-8E8C-43A7-A366-E1831EE24625}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{49D8D72C-8E8C-43A7-A366-E1831EE24625}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{49D8D72C-8E8C-43A7-A366-E1831EE24625}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{49D8D72C-8E8C-43A7-A366-E1831EE24625}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
