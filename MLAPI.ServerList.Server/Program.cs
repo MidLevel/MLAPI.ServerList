@@ -109,14 +109,8 @@ namespace MLAPI.ServerList.Server
                             if (child.Type == JTokenType.Property)
                             {
                                 List<JToken> children = child.Values().ToList();
-                                List<bool> childFilters = new List<bool>();
 
-                                for (int i = 0; i < children.Count; i++)
-                                {
-                                    childFilters.Add(FilterLocalServers(new List<JToken>() { children[i] }, serverModel));
-                                }
-
-                                return childFilters.All(x => x == true);
+                                return children.AsParallel().All(x => FilterLocalServers(new List<JToken>() { x }, serverModel));
                             }
                         }
                         break;
@@ -125,14 +119,8 @@ namespace MLAPI.ServerList.Server
                             if (child.Type == JTokenType.Property)
                             {
                                 List<JToken> children = child.Values().ToList();
-                                List<bool> childFilters = new List<bool>();
 
-                                for (int i = 0; i < children.Count; i++)
-                                {
-                                    childFilters.Add(FilterLocalServers(new List<JToken>() { children[i] }, serverModel));
-                                }
-
-                                return childFilters.Any(x => x == true);
+                                return children.AsParallel().Any(x => FilterLocalServers(new List<JToken>() { x }, serverModel));
                             }
                         }
                         break;
@@ -285,9 +273,7 @@ namespace MLAPI.ServerList.Server
                         {
                             if (child.Type == JTokenType.Property || child.Type == JTokenType.Object)
                             {
-                                List<JToken> children = child.Children().ToList();
-
-                                return FilterLocalServers(children, serverModel);
+                                return FilterLocalServers(child.Children().ToList(), serverModel);
                             }
                         }
                         break;
@@ -315,9 +301,7 @@ namespace MLAPI.ServerList.Server
                         {
                             if (child.Type == JTokenType.Property)
                             {
-                                List<JToken> children = child.Values().ToList();
-
-                                return Builders<ServerModel>.Filter.Not(CreateFilter(new List<JToken>() { children.First() }));
+                                return Builders<ServerModel>.Filter.Not(CreateFilter(new List<JToken>() { child.Values().First() }));
                             }
                         }
                         break;
@@ -509,9 +493,7 @@ namespace MLAPI.ServerList.Server
                         {
                             if (child.Type == JTokenType.Property || child.Type == JTokenType.Object)
                             {
-                                List<JToken> children = child.Children().ToList();
-
-                                return CreateFilter(children);
+                                return CreateFilter(child.Children().ToList());
                             }
                         }
                         break;
