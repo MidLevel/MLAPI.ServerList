@@ -11,5 +11,6 @@
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)MessageType.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HashCode.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ServerContract.cs" />
   </ItemGroup>
 </Project>

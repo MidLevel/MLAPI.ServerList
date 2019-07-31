@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MLAPI.ServerList.Client", "
 EndProject
 Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "MLAPI.ServerList.Shared", "MLAPI.ServerList.Shared\MLAPI.ServerList.Shared.shproj", "{E4A4F493-8E04-4CBD-B35A-EA6BA2770045}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClientExample", "ClientExample\ClientExample.csproj", "{3EEE2C5A-7B56-4A4E-914C-BFC963E15A4F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,5 +23,9 @@ Global
 		{49D8D72C-8E8C-43A7-A366-E1831EE24625}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{49D8D72C-8E8C-43A7-A366-E1831EE24625}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{49D8D72C-8E8C-43A7-A366-E1831EE24625}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3EEE2C5A-7B56-4A4E-914C-BFC963E15A4F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3EEE2C5A-7B56-4A4E-914C-BFC963E15A4F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3EEE2C5A-7B56-4A4E-914C-BFC963E15A4F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3EEE2C5A-7B56-4A4E-914C-BFC963E15A4F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

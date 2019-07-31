@@ -6,9 +6,10 @@
         RemoveServer,
         UpdateServer,
         ServerAlive,
-        Ack,
+        RegisterAck,
         Query,
         QueryResponse,
-        Error
+        ContractCheck,
+        ContractResponse
     }
 }

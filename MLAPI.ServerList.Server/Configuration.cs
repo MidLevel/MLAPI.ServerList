@@ -1,23 +1,30 @@
-﻿using System;
+﻿using MLAPI.ServerList.Shared;
 
 namespace MLAPI.ServerList.Server
 {
     public class Configuration
     {
         public ushort Port { get; set; } = 9423;
-        public int BufferSize { get; set; } = 1024 * 8;
-        public bool UseMongo { get; set; } = true;
+        public string ListenAddress { get; set; } = "0.0.0.0";
+        public bool VerbosePrints = true;
+        public bool UseMongo { get; set; } = false;
         public string MongoConnection { get; set; } = "mongodb://127.0.0.1:27017";
         public string MongoDatabase { get; set; } = "listserver";
         public int ServerTimeout { get; set; } = 20_000;
-        public int AckDelay { get; set; } = 5_000;
+
         public ContractDefinition[] ServerContract { get; set; } = new ContractDefinition[]
         {
             new ContractDefinition()
             {
-                Name = "DEFAULT_ServerName",
+                Name = "Name",
                 Required = false,
                 Type = ContractType.String
+            },
+            new ContractDefinition()
+            {
+                Name = "Players",
+                Required = true,
+                Type = ContractType.Int32
             }
         };
     }

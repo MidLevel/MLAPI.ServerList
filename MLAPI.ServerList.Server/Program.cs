@@ -1,12 +1,13 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using MLAPI.ServerList.Shared;
 using MongoDB.Driver;
@@ -18,73 +19,16 @@ namespace MLAPI.ServerList.Server
     public static class Program
     {
         private static readonly Dictionary<ulong, ContractDefinition> contracts = new Dictionary<ulong, ContractDefinition>();
-        private static readonly ConcurrentQueue<byte[]> buffers = new ConcurrentQueue<byte[]>();
         private static MongoClient mongoClient;
+        private static Configuration configuration;
 
         private static List<ServerModel> localModels = new List<ServerModel>();
-
-        // Checks if two contract definitions are compatible with each other
-        private static bool IsCompatible(ContractDefinition[] v1, ContractDefinition[] v2)
-        {
-            // Contract conflict validation
-            for (int i = 0; i < v1.Length; i++)
-            {
-                bool found = false;
-
-                for (int j = 0; j < v2.Length; j++)
-                {
-                    if (v1[i].Name == v2[j].Name)
-                    {
-                        if (v1[i].Type != v2[j].Type)
-                        {
-                            return false;
-                        }
-
-                        found = true;
-                    }
-                }
-
-                if (v1[i].Required && !found)
-                {
-                    // If required, fail if we dont find.
-                    return false;
-                }
-            }
-
-
-            // Contract conflict validation
-            for (int i = 0; i < v2.Length; i++)
-            {
-                bool found = false;
-
-                for (int j = 0; j < v1.Length; j++)
-                {
-                    if (v2[i].Name == v1[j].Name)
-                    {
-                        if (v2[i].Type != v1[j].Type)
-                        {
-                            return false;
-                        }
-
-                        found = true;
-                    }
-                }
-
-                if (v2[i].Required && !found)
-                {
-                    // If required, fail if we dont find.
-                    return false;
-                }
-            }
-
-            return true;
-        }
 
         private static bool FilterLocalServers(List<JToken> tokens, ServerModel serverModel)
         {
             string name = null;
 
-            foreach (var child in tokens)
+            foreach (JToken child in tokens)
             {
                 if (child.Type == JTokenType.Property)
                 {
@@ -152,6 +96,39 @@ namespace MLAPI.ServerList.Server
                                             return serverModel.ContractData[propertyName] is Uri && (Uri)serverModel.ContractData[propertyName] == child.Values().Values<Uri>().First();
                                         case JTokenType.TimeSpan:
                                             return serverModel.ContractData[propertyName] is TimeSpan && (TimeSpan)serverModel.ContractData[propertyName] == child.Values().Values<TimeSpan>().First();
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    case "$ne":
+                        {
+                            if (child.Type == JTokenType.Property)
+                            {
+                                string propertyName = ((JProperty)child.Parent.Parent).Name;
+
+                                if (serverModel.ContractData.ContainsKey(propertyName))
+                                {
+                                    switch (child.Values().First().Type)
+                                    {
+                                        case JTokenType.Integer:
+                                            return !(serverModel.ContractData[propertyName] is long) || (long)serverModel.ContractData[propertyName] != child.Values().Values<long>().First();
+                                        case JTokenType.Float:
+                                            return (serverModel.ContractData[propertyName] is float) || Math.Abs((float)serverModel.ContractData[propertyName] - child.Values().Values<float>().First()) >= 0.0001;
+                                        case JTokenType.String:
+                                            return (serverModel.ContractData[propertyName] is string) || (string)serverModel.ContractData[propertyName] != child.Values().Values<string>().First();
+                                        case JTokenType.Boolean:
+                                            return (serverModel.ContractData[propertyName] is bool) || (bool)serverModel.ContractData[propertyName] != child.Values().Values<bool>().First();
+                                        case JTokenType.Date:
+                                            return (serverModel.ContractData[propertyName] is DateTime) || (DateTime)serverModel.ContractData[propertyName] != child.Values().Values<DateTime>().First();
+                                        case JTokenType.Bytes:
+                                            return (serverModel.ContractData[propertyName] is byte[]) || !((byte[])serverModel.ContractData[propertyName]).SequenceEqual(child.Values().Values<byte[]>().First());
+                                        case JTokenType.Guid:
+                                            return (serverModel.ContractData[propertyName] is Guid) || (Guid)serverModel.ContractData[propertyName] != child.Values().Values<Guid>().First();
+                                        case JTokenType.Uri:
+                                            return (serverModel.ContractData[propertyName] is Uri) || (Uri)serverModel.ContractData[propertyName] != child.Values().Values<Uri>().First();
+                                        case JTokenType.TimeSpan:
+                                            return (serverModel.ContractData[propertyName] is TimeSpan) || (TimeSpan)serverModel.ContractData[propertyName] != child.Values().Values<TimeSpan>().First();
                                     }
                                 }
                             }
@@ -344,23 +321,51 @@ namespace MLAPI.ServerList.Server
                                 switch (child.Values().First().Type)
                                 {
                                     case JTokenType.Integer:
-                                        return Builders<ServerModel>.Filter.Eq(((JProperty)child.Parent.Parent).Name, child.Values().Values<long>().First());
+                                        return Builders<ServerModel>.Filter.Eq("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<long>().First());
                                     case JTokenType.Float:
-                                        return Builders<ServerModel>.Filter.Eq(((JProperty)child.Parent.Parent).Name, child.Values().Values<float>().First());
+                                        return Builders<ServerModel>.Filter.Eq("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<float>().First());
                                     case JTokenType.String:
-                                        return Builders<ServerModel>.Filter.Eq(((JProperty)child.Parent.Parent).Name, child.Values().Values<string>().First());
+                                        return Builders<ServerModel>.Filter.Eq("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<string>().First());
                                     case JTokenType.Boolean:
-                                        return Builders<ServerModel>.Filter.Eq(((JProperty)child.Parent.Parent).Name, child.Values().Values<bool>().First());
+                                        return Builders<ServerModel>.Filter.Eq("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<bool>().First());
                                     case JTokenType.Date:
-                                        return Builders<ServerModel>.Filter.Eq(((JProperty)child.Parent.Parent).Name, child.Values().Values<DateTime>().First());
+                                        return Builders<ServerModel>.Filter.Eq("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<DateTime>().First());
                                     case JTokenType.Bytes:
-                                        return Builders<ServerModel>.Filter.Eq(((JProperty)child.Parent.Parent).Name, child.Values().Values<byte[]>().First());
+                                        return Builders<ServerModel>.Filter.Eq("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<byte[]>().First());
                                     case JTokenType.Guid:
-                                        return Builders<ServerModel>.Filter.Eq(((JProperty)child.Parent.Parent).Name, child.Values().Values<Guid>().First());
+                                        return Builders<ServerModel>.Filter.Eq("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<Guid>().First());
                                     case JTokenType.Uri:
-                                        return Builders<ServerModel>.Filter.Eq(((JProperty)child.Parent.Parent).Name, child.Values().Values<Uri>().First());
+                                        return Builders<ServerModel>.Filter.Eq("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<Uri>().First());
                                     case JTokenType.TimeSpan:
-                                        return Builders<ServerModel>.Filter.Eq(((JProperty)child.Parent.Parent).Name, child.Values().Values<TimeSpan>().First());
+                                        return Builders<ServerModel>.Filter.Eq("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<TimeSpan>().First());
+                                }
+                            }
+                        }
+                        break;
+                    case "$ne":
+                        {
+                            if (child.Type == JTokenType.Property)
+                            {
+                                switch (child.Values().First().Type)
+                                {
+                                    case JTokenType.Integer:
+                                        return Builders<ServerModel>.Filter.Ne("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<long>().First());
+                                    case JTokenType.Float:
+                                        return Builders<ServerModel>.Filter.Ne("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<float>().First());
+                                    case JTokenType.String:
+                                        return Builders<ServerModel>.Filter.Ne("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<string>().First());
+                                    case JTokenType.Boolean:
+                                        return Builders<ServerModel>.Filter.Ne("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<bool>().First());
+                                    case JTokenType.Date:
+                                        return Builders<ServerModel>.Filter.Ne("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<DateTime>().First());
+                                    case JTokenType.Bytes:
+                                        return Builders<ServerModel>.Filter.Ne("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<byte[]>().First());
+                                    case JTokenType.Guid:
+                                        return Builders<ServerModel>.Filter.Ne("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<Guid>().First());
+                                    case JTokenType.Uri:
+                                        return Builders<ServerModel>.Filter.Ne("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<Uri>().First());
+                                    case JTokenType.TimeSpan:
+                                        return Builders<ServerModel>.Filter.Ne("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<TimeSpan>().First());
                                 }
                             }
                         }
@@ -372,7 +377,7 @@ namespace MLAPI.ServerList.Server
                                 switch (child.Values().First().Type)
                                 {
                                     case JTokenType.String:
-                                        return Builders<ServerModel>.Filter.Regex(((JProperty)child.Parent.Parent).Name, child.Values().Values<string>().First());
+                                        return Builders<ServerModel>.Filter.Regex("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<string>().First());
                                 }
                             }
                         }
@@ -384,23 +389,23 @@ namespace MLAPI.ServerList.Server
                                 switch (child.Values().First().Type)
                                 {
                                     case JTokenType.Integer:
-                                        return Builders<ServerModel>.Filter.Gt(((JProperty)child.Parent.Parent).Name, child.Values().Values<long>().First());
+                                        return Builders<ServerModel>.Filter.Gt("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<long>().First());
                                     case JTokenType.Float:
-                                        return Builders<ServerModel>.Filter.Gt(((JProperty)child.Parent.Parent).Name, child.Values().Values<float>().First());
+                                        return Builders<ServerModel>.Filter.Gt("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<float>().First());
                                     case JTokenType.String:
-                                        return Builders<ServerModel>.Filter.Gt(((JProperty)child.Parent.Parent).Name, child.Values().Values<string>().First());
+                                        return Builders<ServerModel>.Filter.Gt("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<string>().First());
                                     case JTokenType.Boolean:
-                                        return Builders<ServerModel>.Filter.Gt(((JProperty)child.Parent.Parent).Name, child.Values().Values<bool>().First());
+                                        return Builders<ServerModel>.Filter.Gt("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<bool>().First());
                                     case JTokenType.Date:
-                                        return Builders<ServerModel>.Filter.Gt(((JProperty)child.Parent.Parent).Name, child.Values().Values<DateTime>().First());
+                                        return Builders<ServerModel>.Filter.Gt("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<DateTime>().First());
                                     case JTokenType.Bytes:
-                                        return Builders<ServerModel>.Filter.Gt(((JProperty)child.Parent.Parent).Name, child.Values().Values<byte[]>().First());
+                                        return Builders<ServerModel>.Filter.Gt("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<byte[]>().First());
                                     case JTokenType.Guid:
-                                        return Builders<ServerModel>.Filter.Gt(((JProperty)child.Parent.Parent).Name, child.Values().Values<Guid>().First());
+                                        return Builders<ServerModel>.Filter.Gt("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<Guid>().First());
                                     case JTokenType.Uri:
-                                        return Builders<ServerModel>.Filter.Gt(((JProperty)child.Parent.Parent).Name, child.Values().Values<Uri>().First());
+                                        return Builders<ServerModel>.Filter.Gt("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<Uri>().First());
                                     case JTokenType.TimeSpan:
-                                        return Builders<ServerModel>.Filter.Gt(((JProperty)child.Parent.Parent).Name, child.Values().Values<TimeSpan>().First());
+                                        return Builders<ServerModel>.Filter.Gt("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<TimeSpan>().First());
                                 }
                             }
                         }
@@ -412,23 +417,23 @@ namespace MLAPI.ServerList.Server
                                 switch (child.Values().First().Type)
                                 {
                                     case JTokenType.Integer:
-                                        return Builders<ServerModel>.Filter.Gte(((JProperty)child.Parent.Parent).Name, child.Values().Values<long>().First());
+                                        return Builders<ServerModel>.Filter.Gte("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<long>().First());
                                     case JTokenType.Float:
-                                        return Builders<ServerModel>.Filter.Gte(((JProperty)child.Parent.Parent).Name, child.Values().Values<float>().First());
+                                        return Builders<ServerModel>.Filter.Gte("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<float>().First());
                                     case JTokenType.String:
-                                        return Builders<ServerModel>.Filter.Gte(((JProperty)child.Parent.Parent).Name, child.Values().Values<string>().First());
+                                        return Builders<ServerModel>.Filter.Gte("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<string>().First());
                                     case JTokenType.Boolean:
-                                        return Builders<ServerModel>.Filter.Gte(((JProperty)child.Parent.Parent).Name, child.Values().Values<bool>().First());
+                                        return Builders<ServerModel>.Filter.Gte("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<bool>().First());
                                     case JTokenType.Date:
-                                        return Builders<ServerModel>.Filter.Gte(((JProperty)child.Parent.Parent).Name, child.Values().Values<DateTime>().First());
+                                        return Builders<ServerModel>.Filter.Gte("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<DateTime>().First());
                                     case JTokenType.Bytes:
-                                        return Builders<ServerModel>.Filter.Gte(((JProperty)child.Parent.Parent).Name, child.Values().Values<byte[]>().First());
+                                        return Builders<ServerModel>.Filter.Gte("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<byte[]>().First());
                                     case JTokenType.Guid:
-                                        return Builders<ServerModel>.Filter.Gte(((JProperty)child.Parent.Parent).Name, child.Values().Values<Guid>().First());
+                                        return Builders<ServerModel>.Filter.Gte("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<Guid>().First());
                                     case JTokenType.Uri:
-                                        return Builders<ServerModel>.Filter.Gte(((JProperty)child.Parent.Parent).Name, child.Values().Values<Uri>().First());
+                                        return Builders<ServerModel>.Filter.Gte("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<Uri>().First());
                                     case JTokenType.TimeSpan:
-                                        return Builders<ServerModel>.Filter.Gte(((JProperty)child.Parent.Parent).Name, child.Values().Values<TimeSpan>().First());
+                                        return Builders<ServerModel>.Filter.Gte("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<TimeSpan>().First());
                                 }
                             }
                         }
@@ -440,23 +445,23 @@ namespace MLAPI.ServerList.Server
                                 switch (child.Values().First().Type)
                                 {
                                     case JTokenType.Integer:
-                                        return Builders<ServerModel>.Filter.Lt(((JProperty)child.Parent.Parent).Name, child.Values().Values<int>().First());
+                                        return Builders<ServerModel>.Filter.Lt("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<long>().First());
                                     case JTokenType.Float:
-                                        return Builders<ServerModel>.Filter.Lt(((JProperty)child.Parent.Parent).Name, child.Values().Values<float>().First());
+                                        return Builders<ServerModel>.Filter.Lt("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<float>().First());
                                     case JTokenType.String:
-                                        return Builders<ServerModel>.Filter.Lt(((JProperty)child.Parent.Parent).Name, child.Values().Values<string>().First());
+                                        return Builders<ServerModel>.Filter.Lt("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<string>().First());
                                     case JTokenType.Boolean:
-                                        return Builders<ServerModel>.Filter.Lt(((JProperty)child.Parent.Parent).Name, child.Values().Values<bool>().First());
+                                        return Builders<ServerModel>.Filter.Lt("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<bool>().First());
                                     case JTokenType.Date:
-                                        return Builders<ServerModel>.Filter.Lt(((JProperty)child.Parent.Parent).Name, child.Values().Values<DateTime>().First());
+                                        return Builders<ServerModel>.Filter.Lt("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<DateTime>().First());
                                     case JTokenType.Bytes:
-                                        return Builders<ServerModel>.Filter.Lt(((JProperty)child.Parent.Parent).Name, child.Values().Values<byte[]>().First());
+                                        return Builders<ServerModel>.Filter.Lt("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<byte[]>().First());
                                     case JTokenType.Guid:
-                                        return Builders<ServerModel>.Filter.Lt(((JProperty)child.Parent.Parent).Name, child.Values().Values<Guid>().First());
+                                        return Builders<ServerModel>.Filter.Lt("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<Guid>().First());
                                     case JTokenType.Uri:
-                                        return Builders<ServerModel>.Filter.Lt(((JProperty)child.Parent.Parent).Name, child.Values().Values<Uri>().First());
+                                        return Builders<ServerModel>.Filter.Lt("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<Uri>().First());
                                     case JTokenType.TimeSpan:
-                                        return Builders<ServerModel>.Filter.Lt(((JProperty)child.Parent.Parent).Name, child.Values().Values<TimeSpan>().First());
+                                        return Builders<ServerModel>.Filter.Lt("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<TimeSpan>().First());
                                 }
                             }
                         }
@@ -468,23 +473,23 @@ namespace MLAPI.ServerList.Server
                                 switch (child.Values().First().Type)
                                 {
                                     case JTokenType.Integer:
-                                        return Builders<ServerModel>.Filter.Lte(((JProperty)child.Parent.Parent).Name, child.Values().Values<long>().First());
+                                        return Builders<ServerModel>.Filter.Lte("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<long>().First());
                                     case JTokenType.Float:
-                                        return Builders<ServerModel>.Filter.Lte(((JProperty)child.Parent.Parent).Name, child.Values().Values<float>().First());
+                                        return Builders<ServerModel>.Filter.Lte("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<float>().First());
                                     case JTokenType.String:
-                                        return Builders<ServerModel>.Filter.Lte(((JProperty)child.Parent.Parent).Name, child.Values().Values<string>().First());
+                                        return Builders<ServerModel>.Filter.Lte("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<string>().First());
                                     case JTokenType.Boolean:
-                                        return Builders<ServerModel>.Filter.Lte(((JProperty)child.Parent.Parent).Name, child.Values().Values<bool>().First());
+                                        return Builders<ServerModel>.Filter.Lte("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<bool>().First());
                                     case JTokenType.Date:
-                                        return Builders<ServerModel>.Filter.Lte(((JProperty)child.Parent.Parent).Name, child.Values().Values<DateTime>().First());
+                                        return Builders<ServerModel>.Filter.Lte("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<DateTime>().First());
                                     case JTokenType.Bytes:
-                                        return Builders<ServerModel>.Filter.Lte(((JProperty)child.Parent.Parent).Name, child.Values().Values<byte[]>().First());
+                                        return Builders<ServerModel>.Filter.Lte("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<byte[]>().First());
                                     case JTokenType.Guid:
-                                        return Builders<ServerModel>.Filter.Lte(((JProperty)child.Parent.Parent).Name, child.Values().Values<Guid>().First());
+                                        return Builders<ServerModel>.Filter.Lte("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<Guid>().First());
                                     case JTokenType.Uri:
-                                        return Builders<ServerModel>.Filter.Lte(((JProperty)child.Parent.Parent).Name, child.Values().Values<Uri>().First());
+                                        return Builders<ServerModel>.Filter.Lte("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<Uri>().First());
                                     case JTokenType.TimeSpan:
-                                        return Builders<ServerModel>.Filter.Lte(((JProperty)child.Parent.Parent).Name, child.Values().Values<TimeSpan>().First());
+                                        return Builders<ServerModel>.Filter.Lte("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<TimeSpan>().First());
                                 }
                             }
                         }
@@ -509,8 +514,6 @@ namespace MLAPI.ServerList.Server
 
             string currentPath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             string configPath = Path.Combine(currentPath, "config.json");
-
-            Configuration configuration = null;
 
             if (File.Exists(configPath) && false)
             {
@@ -544,359 +547,574 @@ namespace MLAPI.ServerList.Server
                 mongoClient = new MongoClient(configuration.MongoConnection);
             }
 
-            Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-            socket.Bind(new IPEndPoint(IPAddress.Any, configuration.Port));
-
-            while (true)
+            Task.Run(async () =>
             {
-                if (!buffers.TryDequeue(out byte[] buffer))
+                TcpListener listener = new TcpListener(IPAddress.Parse(configuration.ListenAddress), configuration.Port);
+                listener.Start();
+
+                while (true)
                 {
-                    buffer = new byte[configuration.BufferSize];
+                    TcpClient client = await listener.AcceptTcpClientAsync();
+
+                    new Thread(() => HandleNewClient(client).Wait()).Start();
                 }
+            }).Wait();
+        }
 
-                EndPoint endpoint = new IPEndPoint(IPAddress.Any, 0);
+        private static async Task HandleNewClient(TcpClient client)
+        {
+            while (client.Connected)
+            {
+                await HandleIncomingMessage(client);
+            }
+        }
 
-                int size = socket.ReceiveFrom(buffer, ref endpoint);
-
-                if (size > 0)
+        private static async Task HandleIncomingMessage(TcpClient client)
+        {
+            try
+            {
+                using (BinaryReader reader = new BinaryReader(client.GetStream(), Encoding.UTF8, true))
                 {
-                    Task.Run(async () =>
+                    byte messageType = reader.ReadByte();
+
+                    if (messageType == (byte)MessageType.RegisterServer)
                     {
-                        try
+                        Console.WriteLine("[Register] Started");
+
+                        // Parse contract
+                        Dictionary<string, ContractValue> contractValues = new Dictionary<string, ContractValue>();
+                        int valueCount = reader.ReadInt32();
+
+                        for (int i = 0; i < valueCount; i++)
                         {
-                            using (MemoryStream stream = new MemoryStream(buffer, 0, size))
+                            ulong nameHash = reader.ReadUInt64();
+
+                            ContractType type = (ContractType)reader.ReadByte();
+
+                            if (contracts.TryGetValue(nameHash, out ContractDefinition definition) && definition.Type == type)
                             {
-                                using (BinaryReader reader = new BinaryReader(stream))
+                                object boxedValue = null;
+
+                                switch (definition.Type)
                                 {
-                                    byte messageType = reader.ReadByte();
+                                    case ContractType.Int8:
+                                        boxedValue = (long)reader.ReadSByte();
+                                        break;
+                                    case ContractType.Int16:
+                                        boxedValue = (long)reader.ReadInt16();
+                                        break;
+                                    case ContractType.Int32:
+                                        boxedValue = (long)reader.ReadInt32();
+                                        break;
+                                    case ContractType.Int64:
+                                        boxedValue = (long)reader.ReadInt32();
+                                        break;
+                                    case ContractType.UInt8:
+                                        boxedValue = (long)reader.ReadByte();
+                                        break;
+                                    case ContractType.UInt16:
+                                        boxedValue = (long)reader.ReadUInt16();
+                                        break;
+                                    case ContractType.UInt32:
+                                        boxedValue = (long)reader.ReadUInt32();
+                                        break;
+                                    case ContractType.UInt64:
+                                        boxedValue = (long)reader.ReadUInt64();
+                                        break;
+                                    case ContractType.String:
+                                        boxedValue = reader.ReadString();
+                                        break;
+                                    case ContractType.Buffer:
+                                        boxedValue = reader.ReadBytes(reader.ReadInt32());
+                                        break;
+                                    case ContractType.Guid:
+                                        boxedValue = new Guid(reader.ReadString());
+                                        break;
+                                }
 
-                                    if (messageType == (byte)MessageType.RegisterServer)
+                                if (boxedValue != null)
+                                {
+                                    contractValues.Add(definition.Name, new ContractValue()
                                     {
-                                        // Parse contract
-                                        Dictionary<string, ContractValue> contractValues = new Dictionary<string, ContractValue>();
-                                        uint valueCount = reader.ReadUInt32();
+                                        Definition = definition,
+                                        Value = boxedValue
+                                    });
+                                }
+                            }
+                            else
+                            {
+                                switch (type)
+                                {
+                                    case ContractType.Int8:
+                                        reader.ReadSByte();
+                                        break;
+                                    case ContractType.Int16:
+                                        reader.ReadInt16();
+                                        break;
+                                    case ContractType.Int32:
+                                        reader.ReadInt32();
+                                        break;
+                                    case ContractType.Int64:
+                                        reader.ReadInt32();
+                                        break;
+                                    case ContractType.UInt8:
+                                        reader.ReadByte();
+                                        break;
+                                    case ContractType.UInt16:
+                                        reader.ReadUInt16();
+                                        break;
+                                    case ContractType.UInt32:
+                                        reader.ReadUInt32();
+                                        break;
+                                    case ContractType.UInt64:
+                                        reader.ReadUInt64();
+                                        break;
+                                    case ContractType.String:
+                                        reader.ReadString();
+                                        break;
+                                    case ContractType.Buffer:
+                                        reader.ReadBytes(reader.ReadInt32());
+                                        break;
+                                    case ContractType.Guid:
+                                        reader.ReadString();
+                                        break;
+                                }
+                            }
+                        }
 
-                                        for (uint i = 0; i < valueCount; i++)
-                                        {
-                                            ulong nameHash = reader.ReadUInt64();
-
-                                            if (contracts.TryGetValue(nameHash, out ContractDefinition definition))
-                                            {
-                                                object boxedValue = null;
-
-                                                switch (definition.Type)
-                                                {
-                                                    case ContractType.Int8:
-                                                        boxedValue = (long)reader.ReadSByte();
-                                                        break;
-                                                    case ContractType.Int16:
-                                                        boxedValue = (long)reader.ReadInt16();
-                                                        break;
-                                                    case ContractType.Int32:
-                                                        boxedValue = (long)reader.ReadInt32();
-                                                        break;
-                                                    case ContractType.Int64:
-                                                        boxedValue = (long)reader.ReadInt32();
-                                                        break;
-                                                    case ContractType.UInt8:
-                                                        boxedValue = (long)reader.ReadByte();
-                                                        break;
-                                                    case ContractType.UInt16:
-                                                        boxedValue = (long)reader.ReadUInt16();
-                                                        break;
-                                                    case ContractType.UInt32:
-                                                        boxedValue = (long)reader.ReadUInt32();
-                                                        break;
-                                                    case ContractType.UInt64:
-                                                        boxedValue = (long)reader.ReadUInt64();
-                                                        break;
-                                                    case ContractType.String:
-                                                        boxedValue = reader.ReadString();
-                                                        break;
-                                                    case ContractType.Buffer:
-                                                        boxedValue = reader.ReadBytes(reader.ReadInt32());
-                                                        break;
-                                                    case ContractType.Guid:
-                                                        boxedValue = new Guid(reader.ReadBytes(16));
-                                                        break;
-                                                }
-
-                                                if (boxedValue != null)
-                                                {
-                                                    contractValues.Add(definition.Name, new ContractValue()
-                                                    {
-                                                        Definition = definition,
-                                                        Value = boxedValue
-                                                    });
-                                                }
-                                            }
-                                        }
-
-                                        // Contract validation, ensure all REQUIRED fields are present
-                                        for (int i = 0; i < configuration.ServerContract.Length; i++)
-                                        {
-                                            if (configuration.ServerContract[i].Required)
-                                            {
-                                                if (!contractValues.TryGetValue(configuration.ServerContract[i].Name, out ContractValue contractValue) || contractValue.Definition.Type != configuration.ServerContract[i].Type)
-                                                {
-                                                    // Failure, contract did not match
-                                                    return;
-                                                }
-                                            }
-                                        }
-
-                                        List<ContractValue> validatedValues = new List<ContractValue>();
-
-                                        // Remove all fields not part of contract
-                                        for (int i = 0; i < configuration.ServerContract.Length; i++)
-                                        {
-                                            if (contractValues.TryGetValue(configuration.ServerContract[i].Name, out ContractValue contractValue) && contractValue.Definition.Type == configuration.ServerContract[i].Type)
-                                            {
-                                                validatedValues.Add(contractValue);
-                                            }
-                                        }
-
-                                        // Create model for DB
-                                        ServerModel server = new ServerModel()
-                                        {
-                                            Id = Guid.NewGuid(),
-                                            LastPingTime = DateTime.Now,
-                                            Address = ((IPEndPoint)endpoint).Address.MapToIPv6(),
-                                            ContractData = new Dictionary<string, object>()
-                                        };
-
-                                        // Add contract values to model
-                                        for (int i = 0; i < validatedValues.Count; i++)
-                                        {
-                                            server.ContractData.Add(validatedValues[i].Definition.Name, validatedValues[i].Value);
-                                        }
-
-                                        if (configuration.UseMongo)
-                                        {
-                                            // Insert model to DB
-                                            await mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").InsertOneAsync(server);
-                                        }
-                                        else
-                                        {
-                                            localModels.Add(server);
-                                        }
+                        // Contract validation, ensure all REQUIRED fields are present
+                        for (int i = 0; i < configuration.ServerContract.Length; i++)
+                        {
+                            if (configuration.ServerContract[i].Required)
+                            {
+                                if (!contractValues.TryGetValue(configuration.ServerContract[i].Name, out ContractValue contractValue) || contractValue.Definition.Type != configuration.ServerContract[i].Type)
+                                {
+                                    // Failure, contract did not match
+                                    using (BinaryWriter writer = new BinaryWriter(client.GetStream(), Encoding.UTF8, true))
+                                    {
+                                        writer.Write((byte)MessageType.RegisterAck);
+                                        writer.Write(new Guid().ToString());
+                                        writer.Write(false);
                                     }
-                                    else if (messageType == (byte)MessageType.Query)
+
+                                    Console.WriteLine("[Register] Registrar broke contract. Missing required field \"" + configuration.ServerContract[i].Name + "\" of type " + configuration.ServerContract[i].Type);
+                                    return;
+                                }
+                            }
+                        }
+
+                        List<ContractValue> validatedValues = new List<ContractValue>();
+
+                        // Remove all fields not part of contract
+                        for (int i = 0; i < configuration.ServerContract.Length; i++)
+                        {
+                            if (contractValues.TryGetValue(configuration.ServerContract[i].Name, out ContractValue contractValue) && contractValue.Definition.Type == configuration.ServerContract[i].Type)
+                            {
+                                validatedValues.Add(contractValue);
+                            }
+                        }
+
+                        // Create model for DB
+                        ServerModel server = new ServerModel()
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            LastPingTime = DateTime.UtcNow,
+                            Address = ((IPEndPoint)client.Client.RemoteEndPoint).Address.MapToIPv6(),
+                            ContractData = new Dictionary<string, object>()
+                        };
+
+                        // Add contract values to model
+                        for (int i = 0; i < validatedValues.Count; i++)
+                        {
+                            server.ContractData.Add(validatedValues[i].Definition.Name, validatedValues[i].Value);
+                        }
+
+                        if (configuration.VerbosePrints)
+                        {
+                            Console.WriteLine("[Register] Adding: " + JsonConvert.SerializeObject(server));
+                        }
+                        else
+                        {
+                            Console.WriteLine("[Register] Adding 1 server");
+                        }
+
+                        if (configuration.UseMongo)
+                        {
+                            // Insert model to DB
+                            await mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").InsertOneAsync(server);
+                        }
+                        else
+                        {
+                            localModels.Add(server);
+                        }
+
+                        using (BinaryWriter writer = new BinaryWriter(client.GetStream(), Encoding.UTF8, true))
+                        {
+                            writer.Write((byte)MessageType.RegisterAck);
+                            writer.Write(server.Id);
+                            writer.Write(true);
+                        }
+                    }
+                    else if (messageType == (byte)MessageType.Query)
+                    {
+                        DateTime startTime = DateTime.Now;
+                        Console.WriteLine("[Query] Started");
+                        string guid = reader.ReadString();
+                        string query = reader.ReadString();
+                        Console.WriteLine("[Query] Parsing");
+                        JObject parsedQuery = JObject.Parse(query);
+
+                        List<ServerModel> serverModel = null;
+
+                        if (configuration.UseMongo)
+                        {
+                            Console.WriteLine("[Query] Creating mongo filter");
+                            FilterDefinition<ServerModel> filter = Builders<ServerModel>.Filter.And(Builders<ServerModel>.Filter.Where(x => x.LastPingTime >= DateTime.UtcNow.AddMilliseconds(-configuration.ServerTimeout)), CreateFilter(new List<JToken>() { parsedQuery }));
+
+                            if (configuration.VerbosePrints)
+                            {
+                                Console.WriteLine("[Query] Executing mongo query \"" + mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").Find(filter) + "\"");
+                            }
+                            else
+                            {
+                                Console.WriteLine("[Query] Executing mongo query");
+                            }
+
+                            serverModel = await (await mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").FindAsync(filter)).ToListAsync();
+                        }
+                        else
+                        {
+                            Console.WriteLine("[Query] Querying local");
+                            serverModel = localModels.AsParallel().Where(x => x.LastPingTime >= DateTime.UtcNow.AddMilliseconds(-configuration.ServerTimeout) && FilterLocalServers(new List<JToken>() { parsedQuery }, x)).ToList();
+                        }
+
+                        Console.WriteLine("[Query] Found " + (serverModel == null ? 0 : serverModel.Count) + " results. Total query time: " + (DateTime.Now - startTime).TotalMilliseconds + " ms");
+
+                        using (BinaryWriter writer = new BinaryWriter(client.GetStream(), Encoding.UTF8, true))
+                        {
+                            writer.Write((byte)MessageType.QueryResponse);
+                            writer.Write(guid);
+                            writer.Write(serverModel.Count);
+
+                            for (int i = 0; i < serverModel.Count; i++)
+                            {
+                                writer.Write(serverModel[i].Id);
+                                writer.Write(serverModel[i].Address.MapToIPv6().GetAddressBytes());
+                                writer.Write(serverModel[i].LastPingTime.ToBinary());
+                                writer.Write(serverModel[i].ContractData.Count);
+
+                                foreach (KeyValuePair<string, object> pair in serverModel[i].ContractData)
+                                {
+                                    writer.Write(pair.Key);
+                                    writer.Write((byte)contracts[pair.Key.GetStableHash64()].Type);
+
+                                    switch (contracts[pair.Key.GetStableHash64()].Type)
                                     {
-                                        string query = reader.ReadString();
-                                        JObject parsedQuery = JObject.Parse(query);
-
-                                        List<ServerModel> serverModel = null;
-
-                                        if (configuration.UseMongo)
-                                        {
-                                            FilterDefinition<ServerModel> filter = CreateFilter(new List<JToken>() { parsedQuery });
-
-                                            serverModel = await (await mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").FindAsync(filter)).ToListAsync();
-                                        }
-                                        else
-                                        {
-                                            serverModel = localModels.AsParallel().Where(x => FilterLocalServers(new List<JToken>() { parsedQuery }, x)).ToList();
-                                        }
-
-                                        using (MemoryStream sendStream = new MemoryStream())
-                                        {
-                                            using (BinaryWriter writer = new BinaryWriter(sendStream))
-                                            {
-                                                writer.Write(serverModel.Count);
-
-                                                for (int i = 0; i < serverModel.Count; i++)
-                                                {
-                                                    writer.Write(serverModel[i].Id.ToByteArray());
-                                                    writer.Write(serverModel[i].Address.MapToIPv6().GetAddressBytes());
-                                                    writer.Write(serverModel[i].LastPingTime.ToBinary());
-                                                    writer.Write(serverModel[i].ContractData.Count);
-
-                                                    foreach (KeyValuePair<string, object> pair in serverModel[i].ContractData)
-                                                    {
-                                                        writer.Write(pair.Key);
-                                                        // TODO: Fix writing
-                                                        //writer.Write(pair.Value);
-                                                    }
-                                                }
-                                            }
-
-                                            socket.SendTo(sendStream.ToArray(), endpoint);
-                                        }
-                                    }
-                                    else if (messageType == (byte)MessageType.ServerAlive)
-                                    {
-                                        Guid guid = new Guid(reader.ReadBytes(16));
-
-                                        if (configuration.UseMongo)
-                                        {
-                                            // Find and validate address ownership
-                                            FilterDefinition<ServerModel> filter = Builders<ServerModel>.Filter.And(Builders<ServerModel>.Filter.Eq(x => x.Address, ((IPEndPoint)endpoint).Address.MapToIPv6()), Builders<ServerModel>.Filter.Eq(x => x.Id, guid));
-                                            // Create update
-                                            UpdateDefinition<ServerModel> update = Builders<ServerModel>.Update.Set(x => x.LastPingTime, DateTime.UtcNow);
-
-                                            // Execute
-                                            await mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").FindOneAndUpdateAsync(filter, update);
-                                        }
-                                        else
-                                        {
-                                            ServerModel model = localModels.Find(x => x.Address == ((IPEndPoint)endpoint).Address.MapToIPv6() && x.Id == guid);
-                                            model.LastPingTime = DateTime.UtcNow;
-                                        }
-                                    }
-                                    else if (messageType == (byte)MessageType.RemoveServer)
-                                    {
-                                        Guid guid = new Guid(reader.ReadBytes(16));
-
-                                        if (configuration.UseMongo)
-                                        {
-                                            // Find and validate address ownership
-                                            FilterDefinition<ServerModel> filter = Builders<ServerModel>.Filter.And(Builders<ServerModel>.Filter.Eq(x => x.Address, ((IPEndPoint)endpoint).Address.MapToIPv6()), Builders<ServerModel>.Filter.Eq(x => x.Id, guid));
-
-                                            // Execute
-                                            await mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").FindOneAndDeleteAsync(filter);
-                                        }
-                                        else
-                                        {
-                                            localModels.RemoveAll(x => x.Id == guid && x.Address == ((IPEndPoint)endpoint).Address.MapToIPv6());
-                                        }
-                                    }
-                                    else if (messageType == (byte)MessageType.UpdateServer)
-                                    {
-                                        Guid guid = new Guid(reader.ReadBytes(16));
-
-                                        ServerModel result = null;
-
-                                        if (configuration.UseMongo)
-                                        {
-                                            result = await mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").Find(x => x.Id == guid && x.Address == ((IPEndPoint)endpoint).Address.MapToIPv6()).FirstOrDefaultAsync();
-                                        }
-                                        else
-                                        {
-                                            result = localModels.Find(x => x.Id == guid && x.Address == ((IPEndPoint)endpoint).Address.MapToIPv6());
-                                        }
-
-                                        if (result != null)
-                                        {
-                                            // Parse contract
-                                            Dictionary<string, ContractValue> contractValues = new Dictionary<string, ContractValue>();
-                                            uint valueCount = reader.ReadUInt32();
-
-                                            for (uint i = 0; i < valueCount; i++)
-                                            {
-                                                ulong nameHash = reader.ReadUInt64();
-
-                                                if (contracts.TryGetValue(nameHash, out ContractDefinition definition))
-                                                {
-                                                    object boxedValue = null;
-
-                                                    switch (definition.Type)
-                                                    {
-                                                        case ContractType.Int8:
-                                                            boxedValue = (long)reader.ReadSByte();
-                                                            break;
-                                                        case ContractType.Int16:
-                                                            boxedValue = (long)reader.ReadInt16();
-                                                            break;
-                                                        case ContractType.Int32:
-                                                            boxedValue = (long)reader.ReadInt32();
-                                                            break;
-                                                        case ContractType.Int64:
-                                                            boxedValue = (long)reader.ReadInt32();
-                                                            break;
-                                                        case ContractType.UInt8:
-                                                            boxedValue = (long)reader.ReadByte();
-                                                            break;
-                                                        case ContractType.UInt16:
-                                                            boxedValue = (long)reader.ReadUInt16();
-                                                            break;
-                                                        case ContractType.UInt32:
-                                                            boxedValue = (long)reader.ReadUInt32();
-                                                            break;
-                                                        case ContractType.UInt64:
-                                                            boxedValue = (long)reader.ReadUInt64();
-                                                            break;
-                                                        case ContractType.String:
-                                                            boxedValue = reader.ReadString();
-                                                            break;
-                                                        case ContractType.Buffer:
-                                                            boxedValue = reader.ReadBytes(reader.ReadInt32());
-                                                            break;
-                                                        case ContractType.Guid:
-                                                            boxedValue = new Guid(reader.ReadBytes(16));
-                                                            break;
-                                                    }
-
-                                                    if (boxedValue != null)
-                                                    {
-                                                        contractValues.Add(definition.Name, new ContractValue()
-                                                        {
-                                                            Definition = definition,
-                                                            Value = boxedValue
-                                                        });
-                                                    }
-                                                }
-                                            }
-
-                                            // Contract validation, ensure all REQUIRED fields are present
-                                            for (int i = 0; i < configuration.ServerContract.Length; i++)
-                                            {
-                                                if (configuration.ServerContract[i].Required)
-                                                {
-                                                    if (!contractValues.TryGetValue(configuration.ServerContract[i].Name, out ContractValue contractValue) || contractValue.Definition.Type != configuration.ServerContract[i].Type)
-                                                    {
-                                                        // Failure, contract did not match
-                                                        return;
-                                                    }
-                                                }
-                                            }
-
-                                            List<ContractValue> validatedValues = new List<ContractValue>();
-
-                                            // Remove all fields not part of contract
-                                            for (int i = 0; i < configuration.ServerContract.Length; i++)
-                                            {
-                                                if (contractValues.TryGetValue(configuration.ServerContract[i].Name, out ContractValue contractValue) && contractValue.Definition.Type == configuration.ServerContract[i].Type)
-                                                {
-                                                    validatedValues.Add(contractValue);
-                                                }
-                                            }
-
-                                            Dictionary<string, object> validatedLookupValues = new Dictionary<string, object>();
-
-                                            // Add contract values to model
-                                            for (int i = 0; i < validatedValues.Count; i++)
-                                            {
-                                                validatedLookupValues.Add(validatedValues[i].Definition.Name, validatedValues[i].Value);
-                                            }
-
-                                            if (configuration.UseMongo)
-                                            {
-                                                // Find and validate address ownership
-                                                FilterDefinition<ServerModel> filter = Builders<ServerModel>.Filter.And(Builders<ServerModel>.Filter.Eq(x => x.Address, ((IPEndPoint)endpoint).Address.MapToIPv6()), Builders<ServerModel>.Filter.Eq(x => x.Id, guid));
-                                                // Create update
-                                                UpdateDefinition<ServerModel> update = Builders<ServerModel>.Update.Set(x => x.LastPingTime, DateTime.UtcNow).Set(x => x.ContractData, validatedLookupValues);
-
-                                                // Insert model to DB
-                                                await mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").FindOneAndUpdateAsync(filter, update);
-                                            }
-                                            else
-                                            {
-                                                ServerModel model = localModels.Find(x => x.Address == ((IPEndPoint)endpoint).Address.MapToIPv6() && x.Id == guid);
-                                                model.LastPingTime = DateTime.UtcNow;
-                                                model.ContractData = validatedLookupValues;
-                                            }
-                                        }
+                                        case ContractType.Int8:
+                                            writer.Write((sbyte)(long)pair.Value);
+                                            break;
+                                        case ContractType.Int16:
+                                            writer.Write((short)(long)pair.Value);
+                                            break;
+                                        case ContractType.Int32:
+                                            writer.Write((int)(long)pair.Value);
+                                            break;
+                                        case ContractType.Int64:
+                                            writer.Write((long)pair.Value);
+                                            break;
+                                        case ContractType.UInt8:
+                                            writer.Write((byte)(long)pair.Value);
+                                            break;
+                                        case ContractType.UInt16:
+                                            writer.Write((ushort)(long)pair.Value);
+                                            break;
+                                        case ContractType.UInt32:
+                                            writer.Write((uint)(long)pair.Value);
+                                            break;
+                                        case ContractType.UInt64:
+                                            writer.Write((ulong)(long)pair.Value);
+                                            break;
+                                        case ContractType.String:
+                                            writer.Write((string)pair.Value);
+                                            break;
+                                        case ContractType.Buffer:
+                                            writer.Write(((byte[])pair.Value).Length);
+                                            writer.Write((byte[])pair.Value);
+                                            break;
+                                        case ContractType.Guid:
+                                            writer.Write(((Guid)pair.Value).ToString());
+                                            break;
                                     }
                                 }
                             }
                         }
-                        finally
+                    }
+                    else if (messageType == (byte)MessageType.ServerAlive)
+                    {
+                        Console.WriteLine("[Alive] Started");
+                        Guid guid = new Guid(reader.ReadString());
+
+                        if (configuration.UseMongo)
                         {
-                            buffers.Enqueue(buffer);
+                            // Find and validate address ownership
+                            FilterDefinition<ServerModel> filter = Builders<ServerModel>.Filter.And(Builders<ServerModel>.Filter.Where(x => x.LastPingTime >= DateTime.UtcNow.AddMilliseconds(-configuration.ServerTimeout)), Builders<ServerModel>.Filter.Eq(x => x.Address, ((IPEndPoint)client.Client.RemoteEndPoint).Address.MapToIPv6()), Builders<ServerModel>.Filter.Eq(x => x.Id, guid.ToString()));
+                            // Create update
+                            UpdateDefinition<ServerModel> update = Builders<ServerModel>.Update.Set(x => x.LastPingTime, DateTime.UtcNow);
+
+                            // Execute
+                            await mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").FindOneAndUpdateAsync(filter, update);
                         }
-                    });
+                        else
+                        {
+                            ServerModel model = localModels.Find(x => x.Address.Equals(((IPEndPoint)client.Client.RemoteEndPoint).Address.MapToIPv6()) && x.Id == guid.ToString() && x.LastPingTime >= DateTime.UtcNow.AddMilliseconds(-configuration.ServerTimeout));
+
+                            if (model != null)
+                            {
+                                model.LastPingTime = DateTime.UtcNow;
+                            }
+                        }
+                    }
+                    else if (messageType == (byte)MessageType.RemoveServer)
+                    {
+                        Console.WriteLine("[Remove] Started");
+
+                        Guid guid = new Guid(reader.ReadString());
+
+                        ServerModel model = null;
+
+                        if (configuration.UseMongo)
+                        {
+                            // Find and validate address ownership
+                            FilterDefinition<ServerModel> filter = Builders<ServerModel>.Filter.And(Builders<ServerModel>.Filter.Where(x => x.LastPingTime >= DateTime.UtcNow.AddMilliseconds(-configuration.ServerTimeout)), Builders<ServerModel>.Filter.Eq(x => x.Address, ((IPEndPoint)client.Client.RemoteEndPoint).Address.MapToIPv6()), Builders<ServerModel>.Filter.Eq(x => x.Id, guid.ToString()));
+
+                            // Execute
+                            model = await mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").FindOneAndDeleteAsync(filter);
+                        }
+                        else
+                        {
+                            model = localModels.Find(x => x.Id == guid.ToString() && x.Address.Equals(((IPEndPoint)client.Client.RemoteEndPoint).Address.MapToIPv6()));
+
+                            if (model != null)
+                            {
+                                localModels.Remove(model);
+                            }
+                        }
+
+                        if (model != null)
+                        {
+                            if (configuration.VerbosePrints)
+                            {
+                                Console.WriteLine("[Remove] Removed: " + JsonConvert.SerializeObject(model));
+                            }
+                            else
+                            {
+                                Console.WriteLine("[Remove] Removed 1 element");
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine("[Remove] Not found");
+                        }
+                    }
+                    else if (messageType == (byte)MessageType.UpdateServer)
+                    {
+                        Console.WriteLine("[Update] Started");
+                        Guid guid = new Guid(reader.ReadString());
+
+                        ServerModel result = null;
+
+                        if (configuration.UseMongo)
+                        {
+                            result = await mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").Find(x => x.Id == guid.ToString() && x.Address == ((IPEndPoint)client.Client.RemoteEndPoint).Address.MapToIPv6() && x.LastPingTime >= DateTime.UtcNow.AddMilliseconds(-configuration.ServerTimeout)).FirstOrDefaultAsync();
+                        }
+                        else
+                        {
+                            result = localModels.Find(x => x.Id == guid.ToString() && x.Address.Equals(((IPEndPoint)client.Client.RemoteEndPoint).Address.MapToIPv6()) && x.LastPingTime >= DateTime.UtcNow.AddMilliseconds(-configuration.ServerTimeout));
+                        }
+
+                        if (result != null)
+                        {
+                            // Parse contract
+                            Dictionary<string, ContractValue> contractValues = new Dictionary<string, ContractValue>();
+                            int valueCount = reader.ReadInt32();
+
+                            for (int i = 0; i < valueCount; i++)
+                            {
+                                ulong nameHash = reader.ReadUInt64();
+
+                                ContractType type = (ContractType)reader.ReadByte();
+
+                                if (contracts.TryGetValue(nameHash, out ContractDefinition definition) && definition.Type == type)
+                                {
+                                    object boxedValue = null;
+
+                                    switch (definition.Type)
+                                    {
+                                        case ContractType.Int8:
+                                            boxedValue = (long)reader.ReadSByte();
+                                            break;
+                                        case ContractType.Int16:
+                                            boxedValue = (long)reader.ReadInt16();
+                                            break;
+                                        case ContractType.Int32:
+                                            boxedValue = (long)reader.ReadInt32();
+                                            break;
+                                        case ContractType.Int64:
+                                            boxedValue = (long)reader.ReadInt64();
+                                            break;
+                                        case ContractType.UInt8:
+                                            boxedValue = (long)reader.ReadByte();
+                                            break;
+                                        case ContractType.UInt16:
+                                            boxedValue = (long)reader.ReadUInt16();
+                                            break;
+                                        case ContractType.UInt32:
+                                            boxedValue = (long)reader.ReadUInt32();
+                                            break;
+                                        case ContractType.UInt64:
+                                            boxedValue = (long)reader.ReadUInt64();
+                                            break;
+                                        case ContractType.String:
+                                            boxedValue = reader.ReadString();
+                                            break;
+                                        case ContractType.Buffer:
+                                            boxedValue = reader.ReadBytes(reader.ReadInt32());
+                                            break;
+                                        case ContractType.Guid:
+                                            boxedValue = new Guid(reader.ReadString());
+                                            break;
+                                    }
+
+                                    if (boxedValue != null)
+                                    {
+                                        contractValues.Add(definition.Name, new ContractValue()
+                                        {
+                                            Definition = definition,
+                                            Value = boxedValue
+                                        });
+                                    }
+                                }
+                                else
+                                {
+                                    switch (type)
+                                    {
+                                        case ContractType.Int8:
+                                            reader.ReadSByte();
+                                            break;
+                                        case ContractType.Int16:
+                                            reader.ReadInt16();
+                                            break;
+                                        case ContractType.Int32:
+                                            reader.ReadInt32();
+                                            break;
+                                        case ContractType.Int64:
+                                            reader.ReadInt64();
+                                            break;
+                                        case ContractType.UInt8:
+                                            reader.ReadByte();
+                                            break;
+                                        case ContractType.UInt16:
+                                            reader.ReadUInt16();
+                                            break;
+                                        case ContractType.UInt32:
+                                            reader.ReadUInt32();
+                                            break;
+                                        case ContractType.UInt64:
+                                            reader.ReadUInt64();
+                                            break;
+                                        case ContractType.String:
+                                            reader.ReadString();
+                                            break;
+                                        case ContractType.Buffer:
+                                            reader.ReadBytes(reader.ReadInt32());
+                                            break;
+                                        case ContractType.Guid:
+                                            reader.ReadString();
+                                            break;
+                                    }
+                                }
+                            }
+
+                            // Contract validation, ensure all REQUIRED fields are present
+                            for (int i = 0; i < configuration.ServerContract.Length; i++)
+                            {
+                                if (configuration.ServerContract[i].Required)
+                                {
+                                    if (!contractValues.TryGetValue(configuration.ServerContract[i].Name, out ContractValue contractValue) || contractValue.Definition.Type != configuration.ServerContract[i].Type)
+                                    {
+                                        // Failure, contract did not match
+                                        return;
+                                    }
+                                }
+                            }
+
+                            List<ContractValue> validatedValues = new List<ContractValue>();
+
+                            // Remove all fields not part of contract
+                            for (int i = 0; i < configuration.ServerContract.Length; i++)
+                            {
+                                if (contractValues.TryGetValue(configuration.ServerContract[i].Name, out ContractValue contractValue) && contractValue.Definition.Type == configuration.ServerContract[i].Type)
+                                {
+                                    validatedValues.Add(contractValue);
+                                }
+                            }
+
+                            Dictionary<string, object> validatedLookupValues = new Dictionary<string, object>();
+
+                            // Add contract values to model
+                            for (int i = 0; i < validatedValues.Count; i++)
+                            {
+                                validatedLookupValues.Add(validatedValues[i].Definition.Name, validatedValues[i].Value);
+                            }
+
+                            if (configuration.UseMongo)
+                            {
+                                // Find and validate address ownership
+                                FilterDefinition<ServerModel> filter = Builders<ServerModel>.Filter.And(Builders<ServerModel>.Filter.Where(x => x.LastPingTime >= DateTime.UtcNow.AddMilliseconds(-configuration.ServerTimeout)), Builders<ServerModel>.Filter.Eq(x => x.Address, ((IPEndPoint)client.Client.RemoteEndPoint).Address.MapToIPv6()), Builders<ServerModel>.Filter.Eq(x => x.Id, guid.ToString()));
+                                // Create update
+                                UpdateDefinition<ServerModel> update = Builders<ServerModel>.Update.Set(x => x.LastPingTime, DateTime.UtcNow).Set(x => x.ContractData, validatedLookupValues);
+
+                                // Insert model to DB
+                                await mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").FindOneAndUpdateAsync(filter, update);
+                            }
+                            else
+                            {
+                                ServerModel model = localModels.Find(x => x.Address.Equals(((IPEndPoint)client.Client.RemoteEndPoint).Address.MapToIPv6()) && x.Id == guid.ToString() && x.LastPingTime >= DateTime.UtcNow.AddMilliseconds(-configuration.ServerTimeout));
+                                model.LastPingTime = DateTime.UtcNow;
+                                model.ContractData = validatedLookupValues;
+                            }
+                        }
+                    }
+                    else if (messageType == (byte)MessageType.ContractCheck)
+                    {
+                        Console.WriteLine("[ContractCheck] Started");
+
+                        string guid = reader.ReadString();
+                        int contractCount = reader.ReadInt32();
+
+                        WeakContractDefinition[] remoteContracts = new WeakContractDefinition[contractCount];
+
+                        for (int i = 0; i < contractCount; i++)
+                        {
+                            remoteContracts[i] = new WeakContractDefinition()
+                            {
+                                Name = reader.ReadString(),
+                                Type = (ContractType)reader.ReadByte()
+                            };
+                        }
+
+                        using (BinaryWriter writer = new BinaryWriter(client.GetStream(), Encoding.UTF8, true))
+                        {
+                            writer.Write((byte)MessageType.ContractResponse);
+                            writer.Write(guid);
+                            writer.Write(ContractDefinition.IsCompatible(remoteContracts, contracts.Select(x => x.Value).ToArray()));
+                        }
+                    }
                 }
+            }
+            catch (IOException)
+            {
+                client.Close();
             }
         }
     }
