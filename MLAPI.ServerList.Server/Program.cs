@@ -19,7 +19,7 @@ namespace MLAPI.ServerList.Server
     {
         private static readonly Dictionary<ulong, ContractDefinition> contracts = new Dictionary<ulong, ContractDefinition>();
         private static MongoClient mongoClient;
-        private static Configuration configuration;
+        internal static Configuration configuration;
 
         private static List<ServerModel> localModels = new List<ServerModel>();
         private static Dictionary<Socket, byte[]> receiveBuffers = new Dictionary<Socket, byte[]>();
@@ -62,7 +62,7 @@ namespace MLAPI.ServerList.Server
             {
                 mongoClient = new MongoClient(configuration.MongoConnection);
 
-                IndexKeysDefinition<ServerModel> indexDefinition = Builders<ServerModel>.IndexKeys.Ascending(x => x.LastPingTime);
+                IndexKeysDefinition<ServerModel> lastPingIndexDefinition = Builders<ServerModel>.IndexKeys.Ascending(x => x.LastPingTime);
 
                 try
                 {
@@ -73,11 +73,22 @@ namespace MLAPI.ServerList.Server
                     // Index probably didnt exist
                 }
                 
-                mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").Indexes.CreateOne(new CreateIndexModel<ServerModel>(indexDefinition, new CreateIndexOptions()
+                mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").Indexes.CreateOne(new CreateIndexModel<ServerModel>(lastPingIndexDefinition, new CreateIndexOptions()
                 {
                     Name = "ServerExpirationIndex",
                     ExpireAfter = TimeSpan.FromMilliseconds(configuration.CollectionExpiryDelay)
                 }));
+
+
+                for (int i = 0; i < configuration.ServerContract.Length; i++)
+                {
+                    if (configuration.ServerContract[i].Type == ContractType.String)
+                    {
+                        IndexKeysDefinition<ServerModel> textIndexDefinition = Builders<ServerModel>.IndexKeys.Text(x => x.ContractData[configuration.ServerContract[i].Name]);
+
+                        mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").Indexes.CreateOne(new CreateIndexModel<ServerModel>(textIndexDefinition));
+                    }
+                }
             }
             else
             {
@@ -163,7 +174,7 @@ namespace MLAPI.ServerList.Server
                             else
                             {
                                 // We are done reading. Process the message now
-                                Task.Run(() => HandleIncomingMessage(socket, 2, targetLength - 2).Wait()).ContinueWith((task) =>
+                                Task.Run(() => HandleIncomingMessage(socket, 2, targetLength - 2)).ContinueWith((task) =>
                                 {
                                     // Continue after
                                     HandleData(socket, 0, 0, 2);
@@ -411,7 +422,7 @@ namespace MLAPI.ServerList.Server
 
                                 if (configuration.VerbosePrints)
                                 {
-                                    Console.WriteLine("[Query] Executing mongo query \"" + await mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").FindAsync(filter) + "\"");
+                                    Console.WriteLine("[Query] Executing mongo query \"" + mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").Find(filter) + "\"");
                                 }
                                 else
                                 {

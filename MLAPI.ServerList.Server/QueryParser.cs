@@ -63,6 +63,58 @@ namespace MLAPI.ServerList.Server
                             }
                         }
                         break;
+                    case "$text":
+                        {
+                            if (child.Type == JTokenType.Property)
+                            {
+                                List<JToken> children = child.Values().ToList();
+
+                                JToken searchToken = children.Where(x => x is JProperty property && property.Name == "$search").FirstOrDefault();
+                                JToken caseSensitiveToken = children.Where(x => x is JProperty property && property.Name == "$caseSensitive").FirstOrDefault();
+
+                                // TODO: Document this bad boy. This is NOT part of Mongo and is not supported when running with mongo.
+                                JToken fieldSpecificToken = children.Where(x => x is JProperty property && property.Name == "$fieldSpecific").FirstOrDefault();
+
+                                JToken languageToken = children.Where(x => x is JProperty property && property.Name == "$language").FirstOrDefault();
+                                JToken diacriticSensitiveToken = children.Where(x => x is JProperty property && property.Name == "$diacriticSensitive").FirstOrDefault();
+
+                                if (languageToken != null)
+                                {
+                                    Console.WriteLine("[Query] WARNING - $language is not yet supported on $text");
+                                }
+
+                                if (diacriticSensitiveToken != null)
+                                {
+                                    Console.WriteLine("[Query] WARNING - $diacriticSensitive is not yet supported on $text");
+                                }
+
+                                if (searchToken == null)
+                                {
+                                    Console.WriteLine("[Query] ERROR - $search property is required on $text");
+                                    return false;
+                                }
+
+                                string searchString = searchToken.Values<string>().FirstOrDefault();
+
+                                if (searchString == null)
+                                {
+                                    Console.WriteLine("[Query] WARNING - $search string on $text was empty");
+                                    return false;
+                                }
+
+                                bool caseSensitive = caseSensitiveToken == null ? false : caseSensitiveToken.Values<bool>().FirstOrDefault();
+                                bool fieldSpecific = fieldSpecificToken == null ? false : fieldSpecificToken.Values<bool>().FirstOrDefault();
+
+                                string[] strings = searchString.Split(null);
+
+                                string[] searchableFields = Program.configuration.ServerContract.Where(x => x.Type == Shared.ContractType.String && (!fieldSpecific || x.Name == ((JProperty)child.Parent.Parent).Name)).Select(x => x.Name).ToArray();
+
+                                string[] values = serverModel.ContractData.Where(x => searchableFields.Contains(x.Key)).SelectMany(x => ((string)x.Value).Split(null)).ToArray();
+
+                                return strings.Any(x => values.Any(y => x.Equals(y, caseSensitive ? StringComparison.InvariantCulture : StringComparison.InvariantCultureIgnoreCase)));
+                            }
+                        }
+                        break;
                     case "$in":
                         {
                             if (child.Type == JTokenType.Property)
@@ -233,6 +285,13 @@ namespace MLAPI.ServerList.Server
                         {
                             if (child.Type == JTokenType.Property)
                             {
+                                JToken optionsToken = child.Values().Where(x => x is JProperty property && property.Name == "$options").FirstOrDefault();
+
+                                if (optionsToken != null)
+                                {
+                                    Console.WriteLine("[Query] WARNING - $options is not yet supported on $regex");
+                                }
+
                                 string propertyName = ((JProperty)child.Parent.Parent).Name;
 
                                 if (serverModel.ContractData.ContainsKey(propertyName) && serverModel.ContractData[propertyName] is string)
@@ -466,6 +525,59 @@ namespace MLAPI.ServerList.Server
                             }
                         }
                         break;
+                    case "$text":
+                        {
+                            if (child.Type == JTokenType.Property)
+                            {
+                                List<JToken> children = child.Values().ToList();
+
+                                JToken searchToken = children.Where(x => x is JProperty property && property.Name == "$search").FirstOrDefault();
+                                JToken caseSensitiveToken = children.Where(x => x is JProperty property && property.Name == "$caseSensitive").FirstOrDefault();
+
+                                // TODO: Document this bad boy. This is NOT part of Mongo and is not supported when running with mongo.
+                                JToken fieldSpecificToken = children.Where(x => x is JProperty property && property.Name == "$fieldSpecific").FirstOrDefault();
+
+                                JToken languageToken = children.Where(x => x is JProperty property && property.Name == "$language").FirstOrDefault();
+                                JToken diacriticSensitiveToken = children.Where(x => x is JProperty property && property.Name == "$diacriticSensitive").FirstOrDefault();
+
+                                if (languageToken != null)
+                                {
+                                    Console.WriteLine("[Query] WARNING - $language is not yet supported on $text");
+                                }
+
+                                if (diacriticSensitiveToken != null)
+                                {
+                                    Console.WriteLine("[Query] WARNING - $diacriticSensitive is not yet supported on $text");
+                                }
+
+                                if (fieldSpecificToken != null)
+                                {
+                                    Console.WriteLine("[Query] WARNING - $fieldSpecific is not supported when running with mongo");
+                                }
+
+                                if (searchToken == null)
+                                {
+                                    Console.WriteLine("[Query] ERROR - $search property is required on $text");
+                                    return Builders<ServerModel>.Filter.Where(x => false);
+                                }
+
+                                string searchString = searchToken.Values<string>().FirstOrDefault();
+
+                                if (searchString == null)
+                                {
+                                    Console.WriteLine("[Query] WARNING - $search string on $text was empty");
+                                    return Builders<ServerModel>.Filter.Where(x => false);
+                                }
+
+                                bool caseSensitive = caseSensitiveToken.Values<bool>().FirstOrDefault();
+
+                                return Builders<ServerModel>.Filter.Text(searchString, new TextSearchOptions()
+                                {
+                                    CaseSensitive = caseSensitive
+                                });
+                            }
+                        }
+                        break;
                     case "$in":
                         {
                             if (child.Type == JTokenType.Property)
@@ -608,6 +720,13 @@ namespace MLAPI.ServerList.Server
                         {
                             if (child.Type == JTokenType.Property)
                             {
+                                JToken optionsToken = child.Values().Where(x => x is JProperty property && property.Name == "$options").FirstOrDefault();
+
+                                if (optionsToken != null)
+                                {
+                                    Console.WriteLine("[Query] WARNING - $options is not yet supported on $regex");
+                                }
+
                                 switch (child.Values().First().Type)
                                 {
                                     case JTokenType.String:
