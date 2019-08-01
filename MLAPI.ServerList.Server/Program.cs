@@ -78,6 +78,44 @@ namespace MLAPI.ServerList.Server
                             }
                         }
                         break;
+                    case "$in":
+                        {
+                            if (child.Type == JTokenType.Property)
+                            {
+                                string propertyName = ((JProperty)child.Parent.Parent).Name;
+
+                                JToken firstToken = child.Values().Values().FirstOrDefault();
+
+                                if (firstToken != null && serverModel.ContractData.ContainsKey(propertyName))
+                                {
+                                    switch (firstToken.Type)
+                                    {
+                                        case JTokenType.Integer:
+                                            return serverModel.ContractData[propertyName] is long && child.Values().Values<long>().Contains((long)serverModel.ContractData[propertyName]);
+                                        case JTokenType.Float:
+                                            return serverModel.ContractData[propertyName] is float && child.Values().Values<float>().Contains((float)serverModel.ContractData[propertyName]);
+                                        case JTokenType.String:
+                                            return serverModel.ContractData[propertyName] is string && child.Values().Values<string>().Contains((string)serverModel.ContractData[propertyName]);
+                                        case JTokenType.Boolean:
+                                            return serverModel.ContractData[propertyName] is bool && child.Values().Values<bool>().Contains((bool)serverModel.ContractData[propertyName]);
+                                        case JTokenType.Date:
+                                            return serverModel.ContractData[propertyName] is DateTime && child.Values().Values<DateTime>().Contains((DateTime)serverModel.ContractData[propertyName]);
+                                        case JTokenType.Bytes:
+                                            return serverModel.ContractData[propertyName] is byte[] && child.Values().Values<byte[]>().Contains((byte[])serverModel.ContractData[propertyName]);
+                                        case JTokenType.Guid:
+                                            return serverModel.ContractData[propertyName] is Guid && child.Values().Values<Guid>().Contains((Guid)serverModel.ContractData[propertyName]);
+                                        case JTokenType.Uri:
+                                            return serverModel.ContractData[propertyName] is Uri && child.Values().Values<Uri>().Contains((Uri)serverModel.ContractData[propertyName]);
+                                        case JTokenType.TimeSpan:
+                                            return serverModel.ContractData[propertyName] is TimeSpan && child.Values().Values<TimeSpan>().Contains((TimeSpan)serverModel.ContractData[propertyName]);
+                                    }
+                                }
+
+                                // Fallback, no values provided
+                                return false;
+                            }
+                        }
+                        break;
                     case "$eq":
                         {
                             if (child.Type == JTokenType.Property)
@@ -106,7 +144,19 @@ namespace MLAPI.ServerList.Server
                                             return serverModel.ContractData[propertyName] is Uri && (Uri)serverModel.ContractData[propertyName] == child.Values().Values<Uri>().First();
                                         case JTokenType.TimeSpan:
                                             return serverModel.ContractData[propertyName] is TimeSpan && (TimeSpan)serverModel.ContractData[propertyName] == child.Values().Values<TimeSpan>().First();
+                                        case JTokenType.Null:
+                                            return serverModel.ContractData[propertyName] == null;
+                                        default:
+                                            {
+                                                Console.WriteLine("[Query] ERROR - Cannot operate $eq with value of type " + child.Values().First().Type);
+                                                return false;
+                                            }
                                     }
+                                }
+                                else
+                                {
+                                    // Value does not exist
+                                    return false;
                                 }
                             }
                         }
@@ -139,7 +189,19 @@ namespace MLAPI.ServerList.Server
                                             return (serverModel.ContractData[propertyName] is Uri) || (Uri)serverModel.ContractData[propertyName] != child.Values().Values<Uri>().First();
                                         case JTokenType.TimeSpan:
                                             return (serverModel.ContractData[propertyName] is TimeSpan) || (TimeSpan)serverModel.ContractData[propertyName] != child.Values().Values<TimeSpan>().First();
+                                        case JTokenType.Null:
+                                            return serverModel.ContractData[propertyName] != null;
+                                        default:
+                                            {
+                                                Console.WriteLine("[Query] ERROR - Cannot operate $ne with value of type " + child.Values().First().Type);
+                                                return false;
+                                            }
                                     }
+                                }
+                                else
+                                {
+                                    // Value does not exist
+                                    return false;
                                 }
                             }
                         }
@@ -150,7 +212,6 @@ namespace MLAPI.ServerList.Server
                             {
                                 string propertyName = ((JProperty)child.Parent.Parent).Name;
 
-
                                 if (serverModel.ContractData.ContainsKey(propertyName) && serverModel.ContractData[propertyName] is string)
                                 {
                                     switch (child.Values().First().Type)
@@ -159,7 +220,17 @@ namespace MLAPI.ServerList.Server
                                             {
                                                 return Regex.IsMatch((string)serverModel.ContractData[propertyName], child.Values().Values<string>().First());
                                             }
+                                        default:
+                                            {
+                                                Console.WriteLine("[Query] ERROR - Cannot operate $regex with non string values");
+                                                return false;
+                                            }
                                     }
+                                }
+                                else
+                                {
+                                    // Value does not exist OR is the wrong type
+                                    return false;
                                 }
                             }
                         }
@@ -182,7 +253,17 @@ namespace MLAPI.ServerList.Server
                                             return serverModel.ContractData[propertyName] is DateTime && (DateTime)serverModel.ContractData[propertyName] > child.Values().Values<DateTime>().First();
                                         case JTokenType.TimeSpan:
                                             return serverModel.ContractData[propertyName] is TimeSpan && (TimeSpan)serverModel.ContractData[propertyName] > child.Values().Values<TimeSpan>().First();
+                                        default:
+                                            {
+                                                Console.WriteLine("[Query] ERROR - Cannot operate $gt with value of type " + child.Values().First().Type);
+                                                return false;
+                                            }
                                     }
+                                }
+                                else
+                                {
+                                    // Value does not exist
+                                    return false;
                                 }
                             }
                         }
@@ -205,7 +286,17 @@ namespace MLAPI.ServerList.Server
                                             return serverModel.ContractData[propertyName] is DateTime && (DateTime)serverModel.ContractData[propertyName] >= child.Values().Values<DateTime>().First();
                                         case JTokenType.TimeSpan:
                                             return serverModel.ContractData[propertyName] is TimeSpan && (TimeSpan)serverModel.ContractData[propertyName] >= child.Values().Values<TimeSpan>().First();
+                                        default:
+                                            {
+                                                Console.WriteLine("[Query] ERROR - Cannot operate $gte with value of type " + child.Values().First().Type);
+                                                return false;
+                                            }
                                     }
+                                }
+                                else
+                                {
+                                    // Value does not exist
+                                    return false;
                                 }
                             }
                         }
@@ -228,7 +319,17 @@ namespace MLAPI.ServerList.Server
                                             return serverModel.ContractData[propertyName] is DateTime && (DateTime)serverModel.ContractData[propertyName] < child.Values().Values<DateTime>().First();
                                         case JTokenType.TimeSpan:
                                             return serverModel.ContractData[propertyName] is TimeSpan && (TimeSpan)serverModel.ContractData[propertyName] < child.Values().Values<TimeSpan>().First();
+                                        default:
+                                            {
+                                                Console.WriteLine("[Query] ERROR - Cannot operate $lt with value of type " + child.Values().First().Type);
+                                                return false;
+                                            }
                                     }
+                                }
+                                else
+                                {
+                                    // Value does not exist
+                                    return false;
                                 }
                             }
                         }
@@ -251,7 +352,17 @@ namespace MLAPI.ServerList.Server
                                             return serverModel.ContractData[propertyName] is DateTime && (DateTime)serverModel.ContractData[propertyName] <= child.Values().Values<DateTime>().First();
                                         case JTokenType.TimeSpan:
                                             return serverModel.ContractData[propertyName] is TimeSpan && (TimeSpan)serverModel.ContractData[propertyName] <= child.Values().Values<TimeSpan>().First();
+                                        default:
+                                            {
+                                                Console.WriteLine("[Query] ERROR - Cannot operate $lte with value of type " + child.Values().First().Type);
+                                                return false;
+                                            }
                                     }
+                                }
+                                else
+                                {
+                                    // Value does not exist
+                                    return false;
                                 }
                             }
                         }
@@ -332,6 +443,42 @@ namespace MLAPI.ServerList.Server
                             }
                         }
                         break;
+                    case "$in":
+                        {
+                            if (child.Type == JTokenType.Property)
+                            {
+                                JToken firstToken = child.Values().Values().FirstOrDefault();
+
+                                if (firstToken != null)
+                                {
+                                    switch (firstToken.Type)
+                                    {
+                                        case JTokenType.Integer:
+                                            return Builders<ServerModel>.Filter.In("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<long>());
+                                        case JTokenType.Float:
+                                            return Builders<ServerModel>.Filter.In("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<float>());
+                                        case JTokenType.String:
+                                            return Builders<ServerModel>.Filter.In("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<string>());
+                                        case JTokenType.Boolean:
+                                            return Builders<ServerModel>.Filter.In("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<bool>());
+                                        case JTokenType.Date:
+                                            return Builders<ServerModel>.Filter.In("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<DateTime>());
+                                        case JTokenType.Bytes:
+                                            return Builders<ServerModel>.Filter.In("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<byte[]>());
+                                        case JTokenType.Guid:
+                                            return Builders<ServerModel>.Filter.In("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<Guid>());
+                                        case JTokenType.Uri:
+                                            return Builders<ServerModel>.Filter.In("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<Uri>());
+                                        case JTokenType.TimeSpan:
+                                            return Builders<ServerModel>.Filter.In("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<TimeSpan>());
+                                    }
+                                }
+
+                                // Fallback, no values provided
+                                return Builders<ServerModel>.Filter.Where(x => false);
+                            }
+                        }
+                        break;
                     case "$eq":
                         {
                             if (child.Type == JTokenType.Property)
@@ -356,6 +503,11 @@ namespace MLAPI.ServerList.Server
                                         return Builders<ServerModel>.Filter.Eq("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<Uri>().First());
                                     case JTokenType.TimeSpan:
                                         return Builders<ServerModel>.Filter.Eq("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<TimeSpan>().First());
+                                    default:
+                                        {
+                                            Console.WriteLine("[Query] ERROR - Cannot operate $eq with value of type " + child.Values().First().Type);
+                                            return Builders<ServerModel>.Filter.Where(x => false);
+                                        }
                                 }
                             }
                         }
@@ -384,6 +536,11 @@ namespace MLAPI.ServerList.Server
                                         return Builders<ServerModel>.Filter.Ne("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<Uri>().First());
                                     case JTokenType.TimeSpan:
                                         return Builders<ServerModel>.Filter.Ne("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<TimeSpan>().First());
+                                    default:
+                                        {
+                                            Console.WriteLine("[Query] ERROR - Cannot operate $eq with value of type " + child.Values().First().Type);
+                                            return Builders<ServerModel>.Filter.Where(x => false);
+                                        }
                                 }
                             }
                         }
@@ -396,6 +553,11 @@ namespace MLAPI.ServerList.Server
                                 {
                                     case JTokenType.String:
                                         return Builders<ServerModel>.Filter.Regex("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<string>().First());
+                                    default:
+                                        {
+                                            Console.WriteLine("[Query] ERROR - Cannot operate $regex with non string values");
+                                            return Builders<ServerModel>.Filter.Where(x => false);
+                                        }
                                 }
                             }
                         }
@@ -424,6 +586,11 @@ namespace MLAPI.ServerList.Server
                                         return Builders<ServerModel>.Filter.Gt("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<Uri>().First());
                                     case JTokenType.TimeSpan:
                                         return Builders<ServerModel>.Filter.Gt("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<TimeSpan>().First());
+                                    default:
+                                        {
+                                            Console.WriteLine("[Query] ERROR - Cannot operate $gt with value of type " + child.Values().First().Type);
+                                            return Builders<ServerModel>.Filter.Where(x => false);
+                                        }
                                 }
                             }
                         }
@@ -452,6 +619,11 @@ namespace MLAPI.ServerList.Server
                                         return Builders<ServerModel>.Filter.Gte("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<Uri>().First());
                                     case JTokenType.TimeSpan:
                                         return Builders<ServerModel>.Filter.Gte("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<TimeSpan>().First());
+                                    default:
+                                        {
+                                            Console.WriteLine("[Query] ERROR - Cannot operate $gte with value of type " + child.Values().First().Type);
+                                            return Builders<ServerModel>.Filter.Where(x => false);
+                                        }
                                 }
                             }
                         }
@@ -480,6 +652,11 @@ namespace MLAPI.ServerList.Server
                                         return Builders<ServerModel>.Filter.Lt("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<Uri>().First());
                                     case JTokenType.TimeSpan:
                                         return Builders<ServerModel>.Filter.Lt("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<TimeSpan>().First());
+                                    default:
+                                        {
+                                            Console.WriteLine("[Query] ERROR - Cannot operate $lt with value of type " + child.Values().First().Type);
+                                            return Builders<ServerModel>.Filter.Where(x => false);
+                                        }
                                 }
                             }
                         }
@@ -508,6 +685,11 @@ namespace MLAPI.ServerList.Server
                                         return Builders<ServerModel>.Filter.Lte("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<Uri>().First());
                                     case JTokenType.TimeSpan:
                                         return Builders<ServerModel>.Filter.Lte("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<TimeSpan>().First());
+                                    default:
+                                        {
+                                            Console.WriteLine("[Query] ERROR - Cannot operate $lte with value of type " + child.Values().First().Type);
+                                            return Builders<ServerModel>.Filter.Where(x => false);
+                                        }
                                 }
                             }
                         }
