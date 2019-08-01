@@ -22,27 +22,37 @@ namespace MLAPI.ServerList.Client
 
         public List<ServerModel> SendQuery(string query)
         {
-            using (BinaryWriter writer = new BinaryWriter(client.GetStream(), Encoding.UTF8, true))
+            using (MemoryStream stream = new MemoryStream())
             {
-                Guid guid = Guid.NewGuid();
-                AutoResetEvent resetEvent = new AutoResetEvent(false);
-                List<ServerModel> serverModels = null;
-
-                queryCallbacks.Add(guid, (models) =>
+                using (BinaryWriter writer = new BinaryWriter(stream, Encoding.UTF8, true))
                 {
-                    serverModels = models;
-                    resetEvent.Set();
-                });
+                    stream.Position = 2;
 
-                // Write packet
-                writer.Write((byte)MessageType.Query);
-                writer.Write(guid.ToString());
-                writer.Write(query);
+                    AutoResetEvent resetEvent = new AutoResetEvent(false);
+                    List<ServerModel> serverModels = null;
 
-                // Wait for response
-                resetEvent.WaitOne();
+                    Guid guid = Guid.NewGuid();
 
-                return serverModels;
+                    queryCallbacks.Add(guid, (models) =>
+                    {
+                        serverModels = models;
+                        resetEvent.Set();
+                    });
+
+                    // Write packet
+                    writer.Write((byte)MessageType.Query);
+                    writer.Write(guid.ToString());
+                    writer.Write(query);
+
+                    stream.Position = 0;
+                    for (byte i = 0; i < sizeof(ushort); i++) stream.WriteByte(((byte)(stream.Length >> (i * 8))));
+                    client.Client.Send(stream.GetBuffer(), 0, (int)stream.Length, SocketFlags.None);
+
+                    // Wait for response
+                    resetEvent.WaitOne();
+
+                    return serverModels;
+                }
             }
         }
 
@@ -195,60 +205,69 @@ namespace MLAPI.ServerList.Client
                 resetEvent.Set();
             });
 
-            using (BinaryWriter writer = new BinaryWriter(client.GetStream(), Encoding.UTF8, true))
+            using (MemoryStream stream = new MemoryStream())
             {
-                writer.Write((byte)MessageType.ContractCheck);
-                writer.Write(guid.ToString());
-                writer.Write(validationData.Count);
-
-                foreach (KeyValuePair<string, object> pair in validationData)
+                using (BinaryWriter writer = new BinaryWriter(stream, Encoding.UTF8, true))
                 {
-                    writer.Write(pair.Key);
+                    stream.Position = 2;
 
-                    if (pair.Value is sbyte)
+                    writer.Write((byte)MessageType.ContractCheck);
+                    writer.Write(guid.ToString());
+                    writer.Write(validationData.Count);
+
+                    foreach (KeyValuePair<string, object> pair in validationData)
                     {
-                        writer.Write((byte)ContractType.Int8);
+                        writer.Write(pair.Key);
+
+                        if (pair.Value is sbyte)
+                        {
+                            writer.Write((byte)ContractType.Int8);
+                        }
+                        else if (pair.Value is short)
+                        {
+                            writer.Write((byte)ContractType.Int16);
+                        }
+                        else if (pair.Value is int)
+                        {
+                            writer.Write((byte)ContractType.Int32);
+                        }
+                        else if (pair.Value is long)
+                        {
+                            writer.Write((byte)ContractType.Int64);
+                        }
+                        else if (pair.Value is byte)
+                        {
+                            writer.Write((byte)ContractType.UInt8);
+                        }
+                        else if (pair.Value is ushort)
+                        {
+                            writer.Write((byte)ContractType.UInt16);
+                        }
+                        else if (pair.Value is uint)
+                        {
+                            writer.Write((byte)ContractType.UInt32);
+                        }
+                        else if (pair.Value is ulong)
+                        {
+                            writer.Write((byte)ContractType.UInt64);
+                        }
+                        else if (pair.Value is byte[] bytes)
+                        {
+                            writer.Write((byte)ContractType.Buffer);
+                        }
+                        else if (pair.Value is Guid)
+                        {
+                            writer.Write((byte)ContractType.Guid);
+                        }
+                        else if (pair.Value is string)
+                        {
+                            writer.Write((byte)ContractType.String);
+                        }
                     }
-                    else if (pair.Value is short)
-                    {
-                        writer.Write((byte)ContractType.Int16);
-                    }
-                    else if (pair.Value is int)
-                    {
-                        writer.Write((byte)ContractType.Int32);
-                    }
-                    else if (pair.Value is long)
-                    {
-                        writer.Write((byte)ContractType.Int64);
-                    }
-                    else if (pair.Value is byte)
-                    {
-                        writer.Write((byte)ContractType.UInt8);
-                    }
-                    else if (pair.Value is ushort)
-                    {
-                        writer.Write((byte)ContractType.UInt16);
-                    }
-                    else if (pair.Value is uint)
-                    {
-                        writer.Write((byte)ContractType.UInt32);
-                    }
-                    else if (pair.Value is ulong)
-                    {
-                        writer.Write((byte)ContractType.UInt64);
-                    }
-                    else if (pair.Value is byte[] bytes)
-                    {
-                        writer.Write((byte)ContractType.Buffer);
-                    }
-                    else if (pair.Value is Guid)
-                    {
-                        writer.Write((byte)ContractType.Guid);
-                    }
-                    else if (pair.Value is string)
-                    {
-                        writer.Write((byte)ContractType.String);
-                    }
+
+                    stream.Position = 0;
+                    for (byte i = 0; i < sizeof(ushort); i++) stream.WriteByte(((byte)(stream.Length >> (i * 8))));
+                    client.Client.Send(stream.GetBuffer(), 0, (int)stream.Length, SocketFlags.None);
                 }
             }
 
@@ -277,10 +296,19 @@ namespace MLAPI.ServerList.Client
 
             if (registerGuid != null)
             {
-                using (BinaryWriter writer = new BinaryWriter(client.GetStream(), Encoding.UTF8, true))
+                using (MemoryStream stream = new MemoryStream())
                 {
-                    writer.Write((byte)MessageType.RemoveServer);
-                    writer.Write(registerGuid.Value.ToString());
+                    using (BinaryWriter writer = new BinaryWriter(stream, Encoding.UTF8, true))
+                    {
+                        stream.Position = 2;
+
+                        writer.Write((byte)MessageType.RemoveServer);
+                        writer.Write(registerGuid.Value.ToString());
+
+                        stream.Position = 0;
+                        for (byte i = 0; i < sizeof(ushort); i++) stream.WriteByte(((byte)(stream.Length >> (i * 8))));
+                        client.Client.Send(stream.GetBuffer(), 0, (int)stream.Length, SocketFlags.None);
+                    }
                 }
             }
         }
@@ -319,10 +347,113 @@ namespace MLAPI.ServerList.Client
 
                 advertismentData = data.Where(x => acceptedTypes.Contains(x.Value.GetType())).ToDictionary(x => x.Key, x => x.Value);
 
-                using (BinaryWriter writer = new BinaryWriter(client.GetStream(), Encoding.UTF8, true))
+                using (MemoryStream stream = new MemoryStream())
                 {
-                    writer.Write((byte)MessageType.UpdateServer);
-                    writer.Write(registerGuid.Value.ToString());
+                    using (BinaryWriter writer = new BinaryWriter(stream, Encoding.UTF8, true))
+                    {
+                        stream.Position = 2;
+
+                        writer.Write((byte)MessageType.UpdateServer);
+                        writer.Write(registerGuid.Value.ToString());
+
+                        writer.Write(advertismentData.Count);
+
+                        foreach (KeyValuePair<string, object> pair in advertismentData)
+                        {
+                            writer.Write(pair.Key.GetStableHash64());
+
+                            if (pair.Value is sbyte)
+                            {
+                                writer.Write((byte)ContractType.Int8);
+                                writer.Write((sbyte)pair.Value);
+                            }
+                            else if (pair.Value is short)
+                            {
+                                writer.Write((byte)ContractType.Int16);
+                                writer.Write((short)pair.Value);
+                            }
+                            else if (pair.Value is int)
+                            {
+                                writer.Write((byte)ContractType.Int32);
+                                writer.Write((int)pair.Value);
+                            }
+                            else if (pair.Value is long)
+                            {
+                                writer.Write((byte)ContractType.Int64);
+                                writer.Write((long)pair.Value);
+                            }
+                            else if (pair.Value is byte)
+                            {
+                                writer.Write((byte)ContractType.UInt8);
+                                writer.Write((byte)pair.Value);
+                            }
+                            else if (pair.Value is ushort)
+                            {
+                                writer.Write((byte)ContractType.UInt16);
+                                writer.Write((ushort)pair.Value);
+                            }
+                            else if (pair.Value is uint)
+                            {
+                                writer.Write((byte)ContractType.UInt32);
+                                writer.Write((uint)pair.Value);
+                            }
+                            else if (pair.Value is ulong)
+                            {
+                                writer.Write((byte)ContractType.UInt64);
+                                writer.Write((ulong)pair.Value);
+                            }
+                            else if (pair.Value is byte[] bytes)
+                            {
+                                writer.Write((byte)ContractType.Buffer);
+                                writer.Write(bytes.Length);
+                                writer.Write(bytes);
+                            }
+                            else if (pair.Value is Guid guid)
+                            {
+                                writer.Write((byte)ContractType.Guid);
+                                writer.Write(guid.ToString());
+                            }
+                            else if (pair.Value is string)
+                            {
+                                writer.Write((byte)ContractType.String);
+                                writer.Write((string)pair.Value);
+                            }
+                        }
+
+                        stream.Position = 0;
+                        for (byte i = 0; i < sizeof(ushort); i++) stream.WriteByte(((byte)(stream.Length >> (i * 8))));
+                        client.Client.Send(stream.GetBuffer(), 0, (int)stream.Length, SocketFlags.None);
+                    }
+                }
+            }
+        }
+
+        public void StartAdvertisment(Dictionary<string, object> data, int delay = 10_000)
+        {
+            using (MemoryStream stream = new MemoryStream())
+            {
+                using (BinaryWriter writer = new BinaryWriter(stream, Encoding.UTF8, true))
+                {
+                    stream.Position = 2;
+
+                    writer.Write((byte)MessageType.RegisterServer);
+
+                    Type[] acceptedTypes = new Type[]
+                    {
+                    typeof(sbyte),
+                    typeof(short),
+                    typeof(int),
+                    typeof(long),
+                    typeof(byte),
+                    typeof(ushort),
+                    typeof(uint),
+                    typeof(ulong),
+                    typeof(string),
+                    typeof(byte[]),
+                    typeof(Guid)
+                    };
+
+                    advertismentData = data.Where(x => acceptedTypes.Contains(x.Value.GetType())).ToDictionary(x => x.Key, x => x.Value);
 
                     writer.Write(advertismentData.Count);
 
@@ -387,120 +518,44 @@ namespace MLAPI.ServerList.Client
                             writer.Write((string)pair.Value);
                         }
                     }
-                }
-            }
-        }
 
-        public void StartAdvertisment(Dictionary<string, object> data, int delay = 10_000)
-        {
-            using (BinaryWriter writer = new BinaryWriter(client.GetStream(), Encoding.UTF8, true))
-            {
-                writer.Write((byte)MessageType.RegisterServer);
-
-                Type[] acceptedTypes = new Type[]
-                {
-                    typeof(sbyte),
-                    typeof(short),
-                    typeof(int),
-                    typeof(long),
-                    typeof(byte),
-                    typeof(ushort),
-                    typeof(uint),
-                    typeof(ulong),
-                    typeof(string),
-                    typeof(byte[]),
-                    typeof(Guid)
-                };
-
-                advertismentData = data.Where(x => acceptedTypes.Contains(x.Value.GetType())).ToDictionary(x => x.Key, x => x.Value);
-
-                writer.Write(advertismentData.Count);
-
-                foreach (KeyValuePair<string, object> pair in advertismentData)
-                {
-                    writer.Write(pair.Key.GetStableHash64());
-
-                    if (pair.Value is sbyte)
-                    {
-                        writer.Write((byte)ContractType.Int8);
-                        writer.Write((sbyte)pair.Value);
-                    }
-                    else if (pair.Value is short)
-                    {
-                        writer.Write((byte)ContractType.Int16);
-                        writer.Write((short)pair.Value);
-                    }
-                    else if (pair.Value is int)
-                    {
-                        writer.Write((byte)ContractType.Int32);
-                        writer.Write((int)pair.Value);
-                    }
-                    else if (pair.Value is long)
-                    {
-                        writer.Write((byte)ContractType.Int64);
-                        writer.Write((long)pair.Value);
-                    }
-                    else if (pair.Value is byte)
-                    {
-                        writer.Write((byte)ContractType.UInt8);
-                        writer.Write((byte)pair.Value);
-                    }
-                    else if (pair.Value is ushort)
-                    {
-                        writer.Write((byte)ContractType.UInt16);
-                        writer.Write((ushort)pair.Value);
-                    }
-                    else if (pair.Value is uint)
-                    {
-                        writer.Write((byte)ContractType.UInt32);
-                        writer.Write((uint)pair.Value);
-                    }
-                    else if (pair.Value is ulong)
-                    {
-                        writer.Write((byte)ContractType.UInt64);
-                        writer.Write((ulong)pair.Value);
-                    }
-                    else if (pair.Value is byte[] bytes)
-                    {
-                        writer.Write((byte)ContractType.Buffer);
-                        writer.Write(bytes.Length);
-                        writer.Write(bytes);
-                    }
-                    else if (pair.Value is Guid guid)
-                    {
-                        writer.Write((byte)ContractType.Guid);
-                        writer.Write(guid.ToString());
-                    }
-                    else if (pair.Value is string)
-                    {
-                        writer.Write((byte)ContractType.String);
-                        writer.Write((string)pair.Value);
-                    }
+                    stream.Position = 0;
+                    for (byte i = 0; i < sizeof(ushort); i++) stream.WriteByte(((byte)(stream.Length >> (i * 8))));
+                    client.Client.Send(stream.GetBuffer(), 0, (int)stream.Length, SocketFlags.None);
                 }
             }
 
             isAdvertising = true;
 
-            Task.Run(async () =>
+            new Thread(() =>
             {
                 DateTime lastRegisterTime = DateTime.Now;
 
                 while (isAdvertising)
                 {
-                    await Task.Delay(delay - (int)(DateTime.Now - lastRegisterTime).TotalMilliseconds);
+                    Thread.Sleep(delay - (int)(DateTime.Now - lastRegisterTime).TotalMilliseconds);
 
                     if (registerGuid != null && isAdvertising)
                     {
                         lastRegisterTime = DateTime.Now;
 
-                        using (BinaryWriter writer = new BinaryWriter(client.GetStream(), Encoding.UTF8, true))
+                        using (MemoryStream stream = new MemoryStream())
                         {
-                            writer.Write((byte)MessageType.ServerAlive);
-                            writer.Write(registerGuid.Value.ToString());
+                            using (BinaryWriter writer = new BinaryWriter(stream, Encoding.UTF8, true))
+                            {
+                                stream.Position = 2;
+
+                                writer.Write((byte)MessageType.ServerAlive);
+                                writer.Write(registerGuid.Value.ToString());
+
+                                stream.Position = 0;
+                                for (byte i = 0; i < sizeof(ushort); i++) stream.WriteByte(((byte)(stream.Length >> (i * 8))));
+                                client.Client.Send(stream.GetBuffer(), 0, (int)stream.Length, SocketFlags.None);
+                            }
                         }
                     }
                 }
-            });
+            }).Start();
         }
 
         public void Dispose()

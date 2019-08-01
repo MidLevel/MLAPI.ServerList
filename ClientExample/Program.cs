@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using MLAPI.ServerList.Client;
-using MLAPI.ServerList.Shared;
 
 namespace ClientExample
 {
@@ -12,7 +10,7 @@ namespace ClientExample
         static void Main(string[] args)
         {
             // Register 100 servers
-            for (int i = 0; i < 100; i++)
+            for (int i = 0; i < 1000; i++)
             {
                 ServerConnection advertConnection = new ServerConnection();
 
