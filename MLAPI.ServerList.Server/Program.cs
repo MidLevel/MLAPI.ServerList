@@ -6,7 +6,6 @@ using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using MLAPI.ServerList.Shared;
@@ -63,29 +62,25 @@ namespace MLAPI.ServerList.Server
                 mongoClient = new MongoClient(configuration.MongoConnection);
             }
 
-            Task.Run(async () =>
+            TcpListener listener = new TcpListener(IPAddress.Parse(configuration.ListenAddress), configuration.Port);
+            listener.Start();
+
+            while (true)
             {
-                TcpListener listener = new TcpListener(IPAddress.Parse(configuration.ListenAddress), configuration.Port);
-                listener.Start();
-
-                while (true)
-                {
-                    TcpClient client = await listener.AcceptTcpClientAsync();
-
-                    new Thread(() => HandleNewClient(client).Wait()).Start();
-                }
-            }).Wait();
-        }
-
-        private static async Task HandleNewClient(TcpClient client)
-        {
-            while (client.Connected)
-            {
-                await HandleIncomingMessage(client);
+                TcpClient client = listener.AcceptTcpClient();
+                new Thread(() => HandleNewClient(client)).Start();
             }
         }
 
-        private static async Task HandleIncomingMessage(TcpClient client)
+        private static void HandleNewClient(TcpClient client)
+        {
+            while (client.Connected)
+            {
+                HandleIncomingMessage(client);
+            }
+        }
+
+        private static void HandleIncomingMessage(TcpClient client)
         {
             try
             {
@@ -257,7 +252,7 @@ namespace MLAPI.ServerList.Server
                         if (configuration.UseMongo)
                         {
                             // Insert model to DB
-                            await mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").InsertOneAsync(server);
+                            mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").InsertOne(server);
                         }
                         else
                         {
@@ -296,7 +291,7 @@ namespace MLAPI.ServerList.Server
                                 Console.WriteLine("[Query] Executing mongo query");
                             }
 
-                            serverModel = await (await mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").FindAsync(filter)).ToListAsync();
+                            serverModel = (mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").Find(filter)).ToList();
                         }
                         else
                         {
@@ -387,7 +382,7 @@ namespace MLAPI.ServerList.Server
                             UpdateDefinition<ServerModel> update = Builders<ServerModel>.Update.Set(x => x.LastPingTime, DateTime.UtcNow);
 
                             // Execute
-                            await mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").FindOneAndUpdateAsync(filter, update);
+                            mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").FindOneAndUpdate(filter, update);
                         }
                         else
                         {
@@ -421,7 +416,7 @@ namespace MLAPI.ServerList.Server
                             FilterDefinition<ServerModel> filter = Builders<ServerModel>.Filter.And(Builders<ServerModel>.Filter.Where(x => x.LastPingTime >= DateTime.UtcNow.AddMilliseconds(-configuration.ServerTimeout)), Builders<ServerModel>.Filter.Eq(x => x.Address, ((IPEndPoint)client.Client.RemoteEndPoint).Address.MapToIPv6()), Builders<ServerModel>.Filter.Eq(x => x.Id, guid.ToString()));
 
                             // Execute
-                            model = await mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").FindOneAndDeleteAsync(filter);
+                            model = mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").FindOneAndDelete(filter);
                         }
                         else
                         {
@@ -458,7 +453,7 @@ namespace MLAPI.ServerList.Server
 
                         if (configuration.UseMongo)
                         {
-                            result = await mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").Find(x => x.Id == guid.ToString() && x.Address == ((IPEndPoint)client.Client.RemoteEndPoint).Address.MapToIPv6() && x.LastPingTime >= DateTime.UtcNow.AddMilliseconds(-configuration.ServerTimeout)).FirstOrDefaultAsync();
+                            result = mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").Find(x => x.Id == guid.ToString() && x.Address == ((IPEndPoint)client.Client.RemoteEndPoint).Address.MapToIPv6() && x.LastPingTime >= DateTime.UtcNow.AddMilliseconds(-configuration.ServerTimeout)).FirstOrDefault();
                         }
                         else
                         {
@@ -608,7 +603,7 @@ namespace MLAPI.ServerList.Server
                                 UpdateDefinition<ServerModel> update = Builders<ServerModel>.Update.Set(x => x.LastPingTime, DateTime.UtcNow).Set(x => x.ContractData, validatedLookupValues);
 
                                 // Insert model to DB
-                                await mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").FindOneAndUpdateAsync(filter, update);
+                                mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").FindOneAndUpdate(filter, update);
                             }
                             else
                             {
