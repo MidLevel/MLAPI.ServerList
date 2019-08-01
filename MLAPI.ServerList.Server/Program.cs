@@ -68,6 +68,16 @@ namespace MLAPI.ServerList.Server
                             }
                         }
                         break;
+                    case "$exists":
+                        {
+                            if (child.Type == JTokenType.Property)
+                            {
+                                string propertyName = ((JProperty)child.Parent.Parent).Name;
+
+                                return serverModel.ContractData.ContainsKey(propertyName);
+                            }
+                        }
+                        break;
                     case "$eq":
                         {
                             if (child.Type == JTokenType.Property)
@@ -311,6 +321,14 @@ namespace MLAPI.ServerList.Server
                                 }
 
                                 return Builders<ServerModel>.Filter.Or(childFilters);
+                            }
+                        }
+                        break;
+                    case "$exists":
+                        {
+                            if (child.Type == JTokenType.Property)
+                            {
+                                return Builders<ServerModel>.Filter.Exists("ContractData." + ((JProperty)child.Parent.Parent).Name);
                             }
                         }
                         break;
