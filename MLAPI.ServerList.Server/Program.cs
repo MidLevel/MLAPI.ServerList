@@ -116,6 +116,44 @@ namespace MLAPI.ServerList.Server
                             }
                         }
                         break;
+                    case "$nin":
+                        {
+                            if (child.Type == JTokenType.Property)
+                            {
+                                string propertyName = ((JProperty)child.Parent.Parent).Name;
+
+                                JToken firstToken = child.Values().Values().FirstOrDefault();
+
+                                if (firstToken != null && serverModel.ContractData.ContainsKey(propertyName))
+                                {
+                                    switch (firstToken.Type)
+                                    {
+                                        case JTokenType.Integer:
+                                            return serverModel.ContractData[propertyName] is long && !child.Values().Values<long>().Contains((long)serverModel.ContractData[propertyName]);
+                                        case JTokenType.Float:
+                                            return serverModel.ContractData[propertyName] is float && !child.Values().Values<float>().Contains((float)serverModel.ContractData[propertyName]);
+                                        case JTokenType.String:
+                                            return serverModel.ContractData[propertyName] is string && !child.Values().Values<string>().Contains((string)serverModel.ContractData[propertyName]);
+                                        case JTokenType.Boolean:
+                                            return serverModel.ContractData[propertyName] is bool && !child.Values().Values<bool>().Contains((bool)serverModel.ContractData[propertyName]);
+                                        case JTokenType.Date:
+                                            return serverModel.ContractData[propertyName] is DateTime && !child.Values().Values<DateTime>().Contains((DateTime)serverModel.ContractData[propertyName]);
+                                        case JTokenType.Bytes:
+                                            return serverModel.ContractData[propertyName] is byte[] && !child.Values().Values<byte[]>().Contains((byte[])serverModel.ContractData[propertyName]);
+                                        case JTokenType.Guid:
+                                            return serverModel.ContractData[propertyName] is Guid && !child.Values().Values<Guid>().Contains((Guid)serverModel.ContractData[propertyName]);
+                                        case JTokenType.Uri:
+                                            return serverModel.ContractData[propertyName] is Uri && !child.Values().Values<Uri>().Contains((Uri)serverModel.ContractData[propertyName]);
+                                        case JTokenType.TimeSpan:
+                                            return serverModel.ContractData[propertyName] is TimeSpan && !child.Values().Values<TimeSpan>().Contains((TimeSpan)serverModel.ContractData[propertyName]);
+                                    }
+                                }
+
+                                // Fallback, no values provided
+                                return true;
+                            }
+                        }
+                        break;
                     case "$eq":
                         {
                             if (child.Type == JTokenType.Property)
@@ -476,6 +514,42 @@ namespace MLAPI.ServerList.Server
 
                                 // Fallback, no values provided
                                 return Builders<ServerModel>.Filter.Where(x => false);
+                            }
+                        }
+                        break;
+                    case "$nin":
+                        {
+                            if (child.Type == JTokenType.Property)
+                            {
+                                JToken firstToken = child.Values().Values().FirstOrDefault();
+
+                                if (firstToken != null)
+                                {
+                                    switch (firstToken.Type)
+                                    {
+                                        case JTokenType.Integer:
+                                            return Builders<ServerModel>.Filter.Nin("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<long>());
+                                        case JTokenType.Float:
+                                            return Builders<ServerModel>.Filter.Nin("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<float>());
+                                        case JTokenType.String:
+                                            return Builders<ServerModel>.Filter.Nin("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<string>());
+                                        case JTokenType.Boolean:
+                                            return Builders<ServerModel>.Filter.Nin("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<bool>());
+                                        case JTokenType.Date:
+                                            return Builders<ServerModel>.Filter.Nin("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<DateTime>());
+                                        case JTokenType.Bytes:
+                                            return Builders<ServerModel>.Filter.Nin("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<byte[]>());
+                                        case JTokenType.Guid:
+                                            return Builders<ServerModel>.Filter.Nin("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<Guid>());
+                                        case JTokenType.Uri:
+                                            return Builders<ServerModel>.Filter.Nin("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<Uri>());
+                                        case JTokenType.TimeSpan:
+                                            return Builders<ServerModel>.Filter.Nin("ContractData." + ((JProperty)child.Parent.Parent).Name, child.Values().Values<TimeSpan>());
+                                    }
+                                }
+
+                                // Fallback, no values provided. Thus its NOT inside
+                                return Builders<ServerModel>.Filter.Where(x => true);
                             }
                         }
                         break;
