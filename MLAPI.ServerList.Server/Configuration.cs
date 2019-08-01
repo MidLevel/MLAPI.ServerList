@@ -9,6 +9,7 @@ namespace MLAPI.ServerList.Server
         public bool VerbosePrints = true;
         public bool UseMongo { get; set; } = false;
         public string MongoConnection { get; set; } = "mongodb://127.0.0.1:27017";
+        public int CollectionExpiryDelay { get; set; } = 20 * 60 * 1000;
         public string MongoDatabase { get; set; } = "listserver";
         public int ServerTimeout { get; set; } = 20_000;
 

@@ -60,6 +60,25 @@ namespace MLAPI.ServerList.Server
             if (configuration.UseMongo)
             {
                 mongoClient = new MongoClient(configuration.MongoConnection);
+
+                IndexKeysDefinition<ServerModel> indexDefinition = Builders<ServerModel>.IndexKeys.Ascending(x => x.LastPingTime);
+
+                mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").Indexes.CreateOne(new CreateIndexModel<ServerModel>(indexDefinition, new CreateIndexOptions()
+                {
+                    ExpireAfter = TimeSpan.FromMilliseconds(configuration.CollectionExpiryDelay)
+                }));
+            }
+            else
+            {
+                new Thread(() =>
+                {
+                    while (true)
+                    {
+                        localModels.RemoveAll(x => x != null && (DateTime.UtcNow - x.LastPingTime).TotalMilliseconds > configuration.CollectionExpiryDelay);
+
+                        Thread.Sleep(5000);
+                    }
+                }).Start();
             }
 
             TcpListener listener = new TcpListener(IPAddress.Parse(configuration.ListenAddress), configuration.Port);
