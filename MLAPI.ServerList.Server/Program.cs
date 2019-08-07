@@ -31,7 +31,7 @@ namespace MLAPI.ServerList.Server
             string currentPath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             string configPath = Path.Combine(currentPath, "config.json");
 
-            if (File.Exists(configPath) && false)
+            if (File.Exists(configPath))
             {
                 try
                 {
