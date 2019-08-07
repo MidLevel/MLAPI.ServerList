@@ -1,4 +1,7 @@
-﻿namespace MLAPI.ServerList.Shared
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
+
+namespace MLAPI.ServerList.Shared
 {
     public struct WeakContractDefinition
     {
@@ -9,6 +12,7 @@
     public struct ContractDefinition
     {
         public string Name { get; set; }
+        [JsonConverter(typeof(StringEnumConverter))]
         public ContractType Type { get; set; }
         public bool Required { get; set; }
 

@@ -49,7 +49,7 @@ namespace MLAPI.ServerList.Server
             {
                 configuration = new Configuration();
 
-                File.WriteAllText(configPath, JsonConvert.SerializeObject(configuration));
+                File.WriteAllText(configPath, JsonConvert.SerializeObject(configuration, Formatting.Indented));
             }
 
             // Hash contract definitions
