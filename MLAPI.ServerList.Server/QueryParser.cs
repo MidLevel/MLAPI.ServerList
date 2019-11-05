@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using MLAPI.ServerList.Shared;
 using MongoDB.Driver;
 using Newtonsoft.Json.Linq;
 
@@ -107,7 +108,7 @@ namespace MLAPI.ServerList.Server
 
                                 string[] strings = searchString.Split(null);
 
-                                string[] searchableFields = Program.configuration.ServerContract.Where(x => x.Type == Shared.ContractType.String && (!fieldSpecific || x.Name == ((JProperty)child.Parent.Parent).Name)).Select(x => x.Name).ToArray();
+                                string[] searchableFields = Program.configuration.ServerContract.Where(x => x.Type == ContractType.String && (!fieldSpecific || x.Name == ((JProperty)child.Parent.Parent).Name)).Select(x => x.Name).ToArray();
 
                                 string[] values = serverModel.ContractData.Where(x => searchableFields.Contains(x.Key)).SelectMany(x => ((string)x.Value).Split(null)).ToArray();
 

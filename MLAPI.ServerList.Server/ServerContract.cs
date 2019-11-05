@@ -1,7 +1,8 @@
-﻿using Newtonsoft.Json;
+﻿using MLAPI.ServerList.Shared;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 
-namespace MLAPI.ServerList.Shared
+namespace MLAPI.ServerList.Server
 {
     public struct WeakContractDefinition
     {
@@ -124,20 +125,5 @@ namespace MLAPI.ServerList.Shared
     {
         public ContractDefinition Definition;
         public object Value;
-    }
-
-    public enum ContractType
-    {
-        Int8,
-        Int16,
-        Int32,
-        Int64,
-        UInt8,
-        UInt16,
-        UInt32,
-        UInt64,
-        String,
-        Buffer,
-        Guid
     }
 }
