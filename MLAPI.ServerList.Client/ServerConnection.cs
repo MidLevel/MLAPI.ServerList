@@ -6,7 +6,6 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using MLAPI.ServerList.Shared;
 
 namespace MLAPI.ServerList.Client
@@ -24,7 +23,7 @@ namespace MLAPI.ServerList.Client
         {
             using (MemoryStream stream = new MemoryStream())
             {
-                using (BinaryWriter writer = new BinaryWriter(stream, Encoding.UTF8, true))
+                using (BinaryWriter writer = new BinaryWriter(stream, Encoding.UTF8))
                 {
                     stream.Position = 2;
 
@@ -58,121 +57,126 @@ namespace MLAPI.ServerList.Client
 
         public void Connect(string host, int port)
         {
-            client.Connect(host, port);
-
-            new Thread(() =>
+            client.BeginConnect(host, port, (args) =>
             {
-                while (client.Connected)
+                client.EndConnect(args);
+
+                new Thread(() =>
                 {
-                    try
+                    while (client.Connected)
                     {
-                        using (BinaryReader reader = new BinaryReader(client.GetStream(), Encoding.UTF8, true))
+                        try
                         {
-                            byte messageType = reader.ReadByte();
-
-                            if (messageType == (byte)MessageType.QueryResponse)
+                            using (BinaryReader reader = new BinaryReader(client.GetStream(), Encoding.UTF8))
                             {
-                                Guid callbackGuid = new Guid(reader.ReadString());
+                                byte messageType = reader.ReadByte();
 
-                                int serverCount = reader.ReadInt32();
-
-                                List<ServerModel> models = new List<ServerModel>();
-
-                                for (int i = 0; i < serverCount; i++)
+                                if (messageType == (byte)MessageType.QueryResponse)
                                 {
-                                    Guid serverGuid = new Guid(reader.ReadString());
-                                    IPAddress address = new IPAddress(reader.ReadBytes(16));
-                                    DateTime lastPing = DateTime.FromBinary(reader.ReadInt64());
+                                    Guid callbackGuid = new Guid(reader.ReadString());
 
-                                    ServerModel model = new ServerModel()
+                                    int serverCount = reader.ReadInt32();
+
+                                    List<ServerModel> models = new List<ServerModel>();
+
+                                    for (int i = 0; i < serverCount; i++)
                                     {
-                                        Id = serverGuid,
-                                        Address = address,
-                                        LastPingTime = lastPing,
-                                        ContractData = new Dictionary<string, object>()
-                                    };
+                                        Guid serverGuid = new Guid(reader.ReadString());
+                                        IPAddress address = new IPAddress(reader.ReadBytes(16));
+                                        DateTime lastPing = DateTime.FromBinary(reader.ReadInt64());
 
-                                    int dataCount = reader.ReadInt32();
-
-                                    for (int x = 0; x < dataCount; x++)
-                                    {
-                                        string name = reader.ReadString();
-                                        ContractType type = (ContractType)reader.ReadByte();
-
-                                        switch (type)
+                                        ServerModel model = new ServerModel()
                                         {
-                                            case ContractType.Int8:
-                                                model.ContractData[name] = reader.ReadSByte();
-                                                break;
-                                            case ContractType.Int16:
-                                                model.ContractData[name] = reader.ReadInt16();
-                                                break;
-                                            case ContractType.Int32:
-                                                model.ContractData[name] = reader.ReadInt32();
-                                                break;
-                                            case ContractType.Int64:
-                                                model.ContractData[name] = reader.ReadInt64();
-                                                break;
-                                            case ContractType.UInt8:
-                                                model.ContractData[name] = reader.ReadByte();
-                                                break;
-                                            case ContractType.UInt16:
-                                                model.ContractData[name] = reader.ReadUInt16();
-                                                break;
-                                            case ContractType.UInt32:
-                                                model.ContractData[name] = reader.ReadUInt32();
-                                                break;
-                                            case ContractType.UInt64:
-                                                model.ContractData[name] = reader.ReadUInt64();
-                                                break;
-                                            case ContractType.String:
-                                                model.ContractData[name] = reader.ReadString();
-                                                break;
-                                            case ContractType.Buffer:
-                                                model.ContractData[name] = reader.ReadBytes(reader.ReadInt32());
-                                                break;
-                                            case ContractType.Guid:
-                                                model.ContractData[name] = new Guid(reader.ReadString());
-                                                break;
+                                            Id = serverGuid,
+                                            Address = address,
+                                            LastPingTime = lastPing,
+                                            ContractData = new Dictionary<string, object>()
+                                        };
+
+                                        int dataCount = reader.ReadInt32();
+
+                                        for (int x = 0; x < dataCount; x++)
+                                        {
+                                            string name = reader.ReadString();
+                                            ContractType type = (ContractType)reader.ReadByte();
+
+                                            switch (type)
+                                            {
+                                                case ContractType.Int8:
+                                                    model.ContractData[name] = reader.ReadSByte();
+                                                    break;
+                                                case ContractType.Int16:
+                                                    model.ContractData[name] = reader.ReadInt16();
+                                                    break;
+                                                case ContractType.Int32:
+                                                    model.ContractData[name] = reader.ReadInt32();
+                                                    break;
+                                                case ContractType.Int64:
+                                                    model.ContractData[name] = reader.ReadInt64();
+                                                    break;
+                                                case ContractType.UInt8:
+                                                    model.ContractData[name] = reader.ReadByte();
+                                                    break;
+                                                case ContractType.UInt16:
+                                                    model.ContractData[name] = reader.ReadUInt16();
+                                                    break;
+                                                case ContractType.UInt32:
+                                                    model.ContractData[name] = reader.ReadUInt32();
+                                                    break;
+                                                case ContractType.UInt64:
+                                                    model.ContractData[name] = reader.ReadUInt64();
+                                                    break;
+                                                case ContractType.String:
+                                                    model.ContractData[name] = reader.ReadString();
+                                                    break;
+                                                case ContractType.Buffer:
+                                                    model.ContractData[name] = reader.ReadBytes(reader.ReadInt32());
+                                                    break;
+                                                case ContractType.Guid:
+                                                    model.ContractData[name] = new Guid(reader.ReadString());
+                                                    break;
+                                            }
                                         }
+
+                                        models.Add(model);
                                     }
 
-                                    models.Add(model);
+                                    if (queryCallbacks.TryGetValue(callbackGuid, out Action<List<ServerModel>> callback))
+                                    {
+                                        queryCallbacks.Remove(callbackGuid);
+                                        callback(models);
+                                    }
                                 }
-
-                                if (queryCallbacks.Remove(callbackGuid, out Action<List<ServerModel>> callback))
+                                else if (messageType == (byte)MessageType.RegisterAck)
                                 {
-                                    callback(models);
+                                    registerGuid = new Guid(reader.ReadString());
+                                    bool success = reader.ReadBoolean();
+
+                                    if (!success)
+                                    {
+                                        // TODO: Error
+                                    }
                                 }
-                            }
-                            else if (messageType == (byte)MessageType.RegisterAck)
-                            {
-                                registerGuid = new Guid(reader.ReadString());
-                                bool success = reader.ReadBoolean();
-
-                                if (!success)
+                                else if (messageType == (byte)MessageType.ContractResponse)
                                 {
-                                    // TODO: Error
-                                }
-                            }
-                            else if (messageType == (byte)MessageType.ContractResponse)
-                            {
-                                Guid callbackGuid = new Guid(reader.ReadString());
-                                bool success = reader.ReadBoolean();
+                                    Guid callbackGuid = new Guid(reader.ReadString());
+                                    bool success = reader.ReadBoolean();
 
-                                if (validationCallbacks.Remove(callbackGuid, out Action<bool> callback))
-                                {
-                                    callback(success);
+                                    if (validationCallbacks.TryGetValue(callbackGuid, out Action<bool> callback))
+                                    {
+                                        validationCallbacks.Remove(callbackGuid);
+                                        callback(success);
+                                    }
                                 }
                             }
                         }
-                    }
-                    catch (Exception)
-                    {
+                        catch (Exception)
+                        {
 
+                        }
                     }
-                }
-            }).Start();
+                }).Start();
+            }, null);
         }
 
         public bool ValidateContract(Dictionary<string, object> data)
@@ -207,7 +211,7 @@ namespace MLAPI.ServerList.Client
 
             using (MemoryStream stream = new MemoryStream())
             {
-                using (BinaryWriter writer = new BinaryWriter(stream, Encoding.UTF8, true))
+                using (BinaryWriter writer = new BinaryWriter(stream, Encoding.UTF8))
                 {
                     stream.Position = 2;
 
@@ -298,7 +302,7 @@ namespace MLAPI.ServerList.Client
             {
                 using (MemoryStream stream = new MemoryStream())
                 {
-                    using (BinaryWriter writer = new BinaryWriter(stream, Encoding.UTF8, true))
+                    using (BinaryWriter writer = new BinaryWriter(stream, Encoding.UTF8))
                     {
                         stream.Position = 2;
 
@@ -349,7 +353,7 @@ namespace MLAPI.ServerList.Client
 
                 using (MemoryStream stream = new MemoryStream())
                 {
-                    using (BinaryWriter writer = new BinaryWriter(stream, Encoding.UTF8, true))
+                    using (BinaryWriter writer = new BinaryWriter(stream, Encoding.UTF8))
                     {
                         stream.Position = 2;
 
@@ -432,7 +436,7 @@ namespace MLAPI.ServerList.Client
         {
             using (MemoryStream stream = new MemoryStream())
             {
-                using (BinaryWriter writer = new BinaryWriter(stream, Encoding.UTF8, true))
+                using (BinaryWriter writer = new BinaryWriter(stream, Encoding.UTF8))
                 {
                     stream.Position = 2;
 
@@ -541,7 +545,7 @@ namespace MLAPI.ServerList.Client
 
                         using (MemoryStream stream = new MemoryStream())
                         {
-                            using (BinaryWriter writer = new BinaryWriter(stream, Encoding.UTF8, true))
+                            using (BinaryWriter writer = new BinaryWriter(stream, Encoding.UTF8))
                             {
                                 stream.Position = 2;
 
@@ -567,7 +571,6 @@ namespace MLAPI.ServerList.Client
             }
 
             client.Close();
-            client.Dispose();
         }
     }
 }

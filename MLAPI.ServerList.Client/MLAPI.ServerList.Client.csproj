@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netcoreapp2.2</TargetFramework>
+    <TargetFrameworks>net35;net45;net471;netstandard2.0</TargetFrameworks>
   </PropertyGroup>
 
   <Import Project="..\MLAPI.ServerList.Shared\MLAPI.ServerList.Shared.projitems" Label="Shared" Condition="Exists('..\MLAPI.ServerList.Shared\MLAPI.ServerList.Shared.projitems')" />
