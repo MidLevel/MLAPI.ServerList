@@ -522,8 +522,9 @@ namespace MLAPI.ServerList.Server
                         else if (messageType == (byte)MessageType.RemoveServer)
                         {
                             if (configuration.VerbosePrints) Console.WriteLine("[Remove] Started");
+                            
                             Guid guid = new Guid(reader.ReadString());
-
+                            
                             if (configuration.VerbosePrints) Console.WriteLine("[Remove] Parsed from " + guid.ToString());
 
                             ServerModel model = null;
