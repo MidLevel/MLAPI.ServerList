@@ -24,7 +24,7 @@ namespace MLAPI.ServerList.Server
         private static List<ServerModel> localModels = new List<ServerModel>();
         private static Dictionary<Socket, byte[]> receiveBuffers = new Dictionary<Socket, byte[]>();
 
-        public static void Main(string[] _)
+        public static void Main(string[] args)
         {
             Console.WriteLine("Starting server...");
 
