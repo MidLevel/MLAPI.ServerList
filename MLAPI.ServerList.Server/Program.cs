@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -24,7 +24,7 @@ namespace MLAPI.ServerList.Server
         private static List<ServerModel> localModels = new List<ServerModel>();
         private static Dictionary<Socket, byte[]> receiveBuffers = new Dictionary<Socket, byte[]>();
 
-        public static void Main(string[] args)
+        public static void Main(string[] _)
         {
             Console.WriteLine("Starting server...");
 
@@ -212,7 +212,7 @@ namespace MLAPI.ServerList.Server
 
                         if (messageType == (byte)MessageType.RegisterServer)
                         {
-                            Console.WriteLine("[Register] Started");
+                            if (configuration.VerbosePrints) Console.WriteLine("[Register] Started");
 
                             // Parse contract
                             Dictionary<string, ContractValue> contractValues = new Dictionary<string, ContractValue>();
@@ -338,7 +338,7 @@ namespace MLAPI.ServerList.Server
                                             }, null);
                                         }
 
-                                        Console.WriteLine("[Register] Registrar broke contract. Missing required field \"" + configuration.ServerContract[i].Name + "\" of type " + configuration.ServerContract[i].Type);
+                                        Console.WriteLine("[Register] WARNING - Register broke contract. Missing required field \"" + configuration.ServerContract[i].Name + "\" of type " + configuration.ServerContract[i].Type);
                                         return;
                                     }
                                 }
@@ -370,14 +370,7 @@ namespace MLAPI.ServerList.Server
                                 server.ContractData.Add(validatedValues[i].Definition.Name, validatedValues[i].Value);
                             }
 
-                            if (configuration.VerbosePrints)
-                            {
-                                Console.WriteLine("[Register] Adding: " + JsonConvert.SerializeObject(server));
-                            }
-                            else
-                            {
-                                Console.WriteLine("[Register] Adding 1 server");
-                            }
+                            if (configuration.VerbosePrints) Console.WriteLine("[Register] Adding: " + JsonConvert.SerializeObject(server));
 
                             if (configuration.UseMongo)
                             {
@@ -407,37 +400,30 @@ namespace MLAPI.ServerList.Server
                         else if (messageType == (byte)MessageType.Query)
                         {
                             DateTime startTime = DateTime.Now;
-                            Console.WriteLine("[Query] Started");
+                            if (configuration.VerbosePrints) Console.WriteLine("[Query] Started");
                             string guid = reader.ReadString();
                             string query = reader.ReadString();
-                            Console.WriteLine("[Query] Parsing");
+                            if (configuration.VerbosePrints) Console.WriteLine("[Query] Parsing");
                             JObject parsedQuery = JObject.Parse(query);
 
                             List<ServerModel> serverModel = null;
 
                             if (configuration.UseMongo)
                             {
-                                Console.WriteLine("[Query] Creating mongo filter");
+                                if (configuration.VerbosePrints) Console.WriteLine("[Query] Creating mongo filter");
                                 FilterDefinition<ServerModel> filter = Builders<ServerModel>.Filter.And(Builders<ServerModel>.Filter.Where(x => x.LastPingTime >= DateTime.UtcNow.AddMilliseconds(-configuration.ServerTimeout)), QueryParser.CreateFilter(new List<JToken>() { parsedQuery }));
 
-                                if (configuration.VerbosePrints)
-                                {
-                                    Console.WriteLine("[Query] Executing mongo query \"" + mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").Find(filter) + "\"");
-                                }
-                                else
-                                {
-                                    Console.WriteLine("[Query] Executing mongo query");
-                                }
-
+                                if (configuration.VerbosePrints) Console.WriteLine("[Query] Executing mongo query \"" + mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").Find(filter) + "\"");
+                                
                                 serverModel = await (await mongoClient.GetDatabase(configuration.MongoDatabase).GetCollection<ServerModel>("servers").FindAsync(filter)).ToListAsync();
                             }
                             else
                             {
-                                Console.WriteLine("[Query] Querying local");
+                                if (configuration.VerbosePrints) Console.WriteLine("[Query] Querying local");
                                 serverModel = localModels.AsParallel().Where(x => x.LastPingTime >= DateTime.UtcNow.AddMilliseconds(-configuration.ServerTimeout) && QueryParser.FilterLocalServers(new List<JToken>() { parsedQuery }, x)).ToList();
                             }
 
-                            Console.WriteLine("[Query] Found " + (serverModel == null ? 0 : serverModel.Count) + " results. Total query time: " + (DateTime.Now - startTime).TotalMilliseconds + " ms");
+                            if (configuration.VerbosePrints) Console.WriteLine("[Query] Found " + (serverModel == null ? 0 : serverModel.Count) + " results. Total query time: " + (DateTime.Now - startTime).TotalMilliseconds + " ms");
 
                             using (MemoryStream outStream = new MemoryStream())
                             {
@@ -508,17 +494,10 @@ namespace MLAPI.ServerList.Server
                         }
                         else if (messageType == (byte)MessageType.ServerAlive)
                         {
-                            Console.WriteLine("[Alive] Started");
+                            if (configuration.VerbosePrints) Console.WriteLine("[Alive] Started");
                             Guid guid = new Guid(reader.ReadString());
 
-                            if (configuration.VerbosePrints)
-                            {
-                                Console.WriteLine("[Alive] Parsed from " + guid.ToString());
-                            }
-                            else
-                            {
-                                Console.WriteLine("[Alive] Parsed");
-                            }
+                            if (configuration.VerbosePrints) Console.WriteLine("[Alive] Parsed from " + guid.ToString());
 
                             if (configuration.UseMongo)
                             {
@@ -542,17 +521,10 @@ namespace MLAPI.ServerList.Server
                         }
                         else if (messageType == (byte)MessageType.RemoveServer)
                         {
-                            Console.WriteLine("[Remove] Started");
+                            if (configuration.VerbosePrints) Console.WriteLine("[Remove] Started");
                             Guid guid = new Guid(reader.ReadString());
 
-                            if (configuration.VerbosePrints)
-                            {
-                                Console.WriteLine("[Remove] Parsed from " + guid.ToString());
-                            }
-                            else
-                            {
-                                Console.WriteLine("[Remove] Parsed");
-                            }
+                            if (configuration.VerbosePrints) Console.WriteLine("[Remove] Parsed from " + guid.ToString());
 
                             ServerModel model = null;
 
@@ -574,25 +546,21 @@ namespace MLAPI.ServerList.Server
                                 }
                             }
 
-                            if (model != null)
+                            if (configuration.VerbosePrints)
                             {
-                                if (configuration.VerbosePrints)
+                                if (model != null)
                                 {
                                     Console.WriteLine("[Remove] Removed: " + JsonConvert.SerializeObject(model));
                                 }
                                 else
                                 {
-                                    Console.WriteLine("[Remove] Removed 1 element");
+                                    Console.WriteLine("[Remove] Not found");
                                 }
-                            }
-                            else
-                            {
-                                Console.WriteLine("[Remove] Not found");
                             }
                         }
                         else if (messageType == (byte)MessageType.UpdateServer)
                         {
-                            Console.WriteLine("[Update] Started");
+                            if (configuration.VerbosePrints) Console.WriteLine("[Update] Started");
                             Guid guid = new Guid(reader.ReadString());
 
                             ServerModel result = null;
@@ -761,7 +729,7 @@ namespace MLAPI.ServerList.Server
                         }
                         else if (messageType == (byte)MessageType.ContractCheck)
                         {
-                            Console.WriteLine("[ContractCheck] Started");
+                            if (configuration.VerbosePrints) Console.WriteLine("[ContractCheck] Started");
 
                             string guid = reader.ReadString();
                             int contractCount = reader.ReadInt32();
