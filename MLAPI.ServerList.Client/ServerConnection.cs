@@ -55,9 +55,9 @@ namespace MLAPI.ServerList.Client
             }
         }
 
-        public void Connect(string host, int port)
+        public IAsyncResult Connect(string host, int port)
         {
-            client.BeginConnect(host, port, (args) =>
+            return client.BeginConnect(host, port, (args) =>
             {
                 client.EndConnect(args);
 
