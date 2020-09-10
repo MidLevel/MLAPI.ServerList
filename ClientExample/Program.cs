@@ -15,7 +15,7 @@ namespace ClientExample
                 ServerConnection advertConnection = new ServerConnection();
 
                 // Connect
-                advertConnection.Connect("127.0.0.1", 9423);
+                advertConnection.Connect("127.0.0.1", 9423).AsyncWaitHandle.WaitOne();
 
                 // Create server data
                 Dictionary<string, object> data = new Dictionary<string, object>
