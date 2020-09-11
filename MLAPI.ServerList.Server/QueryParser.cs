@@ -884,7 +884,7 @@ namespace MLAPI.ServerList.Server
                 }
             }
 
-            return null;
+            return Builders<ServerModel>.Filter.Empty;
         }
     }
 }
