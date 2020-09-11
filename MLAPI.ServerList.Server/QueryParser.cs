@@ -570,7 +570,7 @@ namespace MLAPI.ServerList.Server
                                     return Builders<ServerModel>.Filter.Where(x => false);
                                 }
 
-                                bool caseSensitive = caseSensitiveToken.Values<bool>().FirstOrDefault();
+                                bool caseSensitive = caseSensitiveToken == null ? false : caseSensitiveToken.Values<bool>().FirstOrDefault();
 
                                 return Builders<ServerModel>.Filter.Text(searchString, new TextSearchOptions()
                                 {
