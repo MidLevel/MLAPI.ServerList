@@ -250,21 +250,21 @@ namespace MLAPI.ServerList.Server
                                         case JTokenType.Integer:
                                             return !(serverModel.ContractData[propertyName] is long) || (long)serverModel.ContractData[propertyName] != child.Values().Values<long>().First();
                                         case JTokenType.Float:
-                                            return (serverModel.ContractData[propertyName] is float) || Math.Abs((float)serverModel.ContractData[propertyName] - child.Values().Values<float>().First()) >= 0.0001;
+                                            return !(serverModel.ContractData[propertyName] is float) || Math.Abs((float)serverModel.ContractData[propertyName] - child.Values().Values<float>().First()) >= 0.0001;
                                         case JTokenType.String:
-                                            return (serverModel.ContractData[propertyName] is string) || (string)serverModel.ContractData[propertyName] != child.Values().Values<string>().First();
+                                            return !(serverModel.ContractData[propertyName] is string) || (string)serverModel.ContractData[propertyName] != child.Values().Values<string>().First();
                                         case JTokenType.Boolean:
-                                            return (serverModel.ContractData[propertyName] is bool) || (bool)serverModel.ContractData[propertyName] != child.Values().Values<bool>().First();
+                                            return !(serverModel.ContractData[propertyName] is bool) || (bool)serverModel.ContractData[propertyName] != child.Values().Values<bool>().First();
                                         case JTokenType.Date:
-                                            return (serverModel.ContractData[propertyName] is DateTime) || (DateTime)serverModel.ContractData[propertyName] != child.Values().Values<DateTime>().First();
+                                            return !(serverModel.ContractData[propertyName] is DateTime) || (DateTime)serverModel.ContractData[propertyName] != child.Values().Values<DateTime>().First();
                                         case JTokenType.Bytes:
-                                            return (serverModel.ContractData[propertyName] is byte[]) || !((byte[])serverModel.ContractData[propertyName]).SequenceEqual(child.Values().Values<byte[]>().First());
+                                            return !(serverModel.ContractData[propertyName] is byte[]) || !((byte[])serverModel.ContractData[propertyName]).SequenceEqual(child.Values().Values<byte[]>().First());
                                         case JTokenType.Guid:
-                                            return (serverModel.ContractData[propertyName] is Guid) || (Guid)serverModel.ContractData[propertyName] != child.Values().Values<Guid>().First();
+                                            return !(serverModel.ContractData[propertyName] is Guid) || (Guid)serverModel.ContractData[propertyName] != child.Values().Values<Guid>().First();
                                         case JTokenType.Uri:
-                                            return (serverModel.ContractData[propertyName] is Uri) || (Uri)serverModel.ContractData[propertyName] != child.Values().Values<Uri>().First();
+                                            return !(serverModel.ContractData[propertyName] is Uri) || (Uri)serverModel.ContractData[propertyName] != child.Values().Values<Uri>().First();
                                         case JTokenType.TimeSpan:
-                                            return (serverModel.ContractData[propertyName] is TimeSpan) || (TimeSpan)serverModel.ContractData[propertyName] != child.Values().Values<TimeSpan>().First();
+                                            return !(serverModel.ContractData[propertyName] is TimeSpan) || (TimeSpan)serverModel.ContractData[propertyName] != child.Values().Values<TimeSpan>().First();
                                         case JTokenType.Null:
                                             return serverModel.ContractData[propertyName] != null;
                                         default:
