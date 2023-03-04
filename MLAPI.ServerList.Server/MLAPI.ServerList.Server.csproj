@@ -8,7 +8,7 @@
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
     <PackageReference Include="StackExchange.Redis" Version="2.0.601" />
-    <PackageReference Include="MongoDB.Driver" Version="2.8.1" />
+    <PackageReference Include="MongoDB.Driver" Version="2.19.0" />
   </ItemGroup>
   <Import Project="..\MLAPI.ServerList.Shared\MLAPI.ServerList.Shared.projitems" Label="Shared" Condition="Exists('..\MLAPI.ServerList.Shared\MLAPI.ServerList.Shared.projitems')" />
 </Project>
